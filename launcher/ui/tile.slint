@@ -1,0 +1,77 @@
+export struct TileData {
+    name: string,
+    icon: image,
+    has-icon: bool,
+    color: color,
+}
+
+// One app tile. Sized at 400×240 design units; the focused tile grows to
+// 1.12× with a white border and glow, and shows its name underneath.
+export component Tile inherits Rectangle {
+    in property <TileData> data;
+    in property <bool> focused;
+    // One design unit (the UI is designed at 1080 lines and scaled).
+    in property <length> u: 1px;
+    callback hovered();
+    callback clicked();
+
+    width: 400 * root.u;
+    height: 240 * root.u;
+
+    card := Rectangle {
+        width: parent.width;
+        height: parent.height;
+        border-radius: 28 * root.u;
+        background: root.data.color;
+        border-color: #ffffffe6;
+        border-width: root.focused ? 4 * root.u : 0;
+        drop-shadow-color: #ffffff59;
+        drop-shadow-blur: root.focused ? 48 * root.u : 0;
+        transform-scale: root.focused ? 1.12 : 1.0;
+        opacity: root.focused ? 1.0 : 0.7;
+        animate transform-scale, opacity, drop-shadow-blur { duration: 180ms; easing: ease-out; }
+
+        if root.data.has-icon: Image {
+            source: root.data.icon;
+            width: parent.height * 0.55;
+            height: parent.height * 0.55;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            image-fit: contain;
+        }
+        if !root.data.has-icon: Text {
+            text: root.data.name;
+            width: parent.width;
+            height: parent.height;
+            color: white;
+            font-size: 40 * root.u;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    Text {
+        text: root.data.name;
+        // Below the grown tile: it sticks out 6 % of its height on each side.
+        y: parent.height * 1.06 + 28 * root.u;
+        x: (parent.width - self.width) / 2;
+        color: white;
+        font-size: 32 * root.u;
+        opacity: root.focused ? 1.0 : 0.0;
+        animate opacity { duration: 150ms; }
+    }
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        changed has-hover => {
+            if self.has-hover {
+                root.hovered();
+            }
+        }
+        clicked => {
+            root.clicked();
+        }
+    }
+}

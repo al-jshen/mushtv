@@ -1,0 +1,261 @@
+import { TileData, Tile } from "tile.slint";
+import "../assets/fonts/Inter-Light.otf";
+import "../assets/fonts/Inter-Regular.otf";
+import "../assets/fonts/Inter-SemiBold.otf";
+
+export { TileData }
+
+export component MainWindow inherits Window {
+    in property <[TileData]> tiles;
+    in-out property <int> focused: 0;
+    in property <string> clock-time;
+    in property <string> clock-date;
+    // "Opening <name>…" while an app starts; "" hides the overlay.
+    in property <string> busy-text;
+    // Error toast; "" hides it.
+    in property <string> toast-text;
+    // Full-screen error (bad config); "" hides it.
+    in property <string> error-title;
+    in property <string> error-details;
+    // Ignore keyboard/pointer, e.g. right after returning from an app.
+    in property <bool> input-locked;
+    in property <image> background-image;
+    in property <bool> has-background-image;
+
+    callback activate(int);
+
+    public function move-focus(delta: int) {
+        if root.tiles.length == 0 || root.busy-text != "" || root.input-locked {
+            return;
+        }
+        root.focused = clamp(root.focused + delta, 0, root.tiles.length - 1);
+    }
+
+    public function activate-focused() {
+        if root.tiles.length == 0 || root.busy-text != "" || root.input-locked {
+            return;
+        }
+        root.activate(root.focused);
+    }
+
+    title: "mushtv";
+    no-frame: true;
+    full-screen: true;
+    default-font-family: "Inter";
+    background: #0d1117;
+
+    // The home screen fades out while an app is opening.
+    property <float> home-opacity: root.busy-text != "" ? 0.0 : 1.0;
+    animate home-opacity { duration: 200ms; }
+
+    // One design unit: the layout is designed at 1920×1080.
+    property <length> u: self.height / 1080;
+    property <length> tile-w: 400 * self.u;
+    property <length> tile-h: 240 * self.u;
+    property <length> gap: 56 * self.u;
+    property <length> side-margin: 120 * self.u;
+    property <length> row-width: root.tiles.length * root.tile-w + max(0, root.tiles.length - 1) * root.gap;
+    // Centered when the row fits; otherwise scrolled to keep focus in view.
+    property <length> row-x: root.row-width <= self.width - 2 * root.side-margin
+        ? (self.width - root.row-width) / 2
+        : clamp(self.width / 2 - (root.focused * (root.tile-w + root.gap) + root.tile-w / 2),
+            self.width - root.side-margin - root.row-width, root.side-margin);
+
+    keys := FocusScope {
+        width: 100%;
+        height: 100%;
+        key-pressed(event) => {
+            if root.error-title != "" {
+                return reject;
+            }
+            if event.text == Key.LeftArrow {
+                root.move-focus(-1);
+                return accept;
+            }
+            if event.text == Key.RightArrow {
+                root.move-focus(1);
+                return accept;
+            }
+            if event.text == Key.Return || event.text == "\n" || event.text == "\u{d}" || event.text == Key.Space {
+                root.activate-focused();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    init => {
+        keys.focus();
+    }
+
+    // Background: gradient with a soft highlight, or a configured image.
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: @linear-gradient(180deg, #0d1117 0%, #1b2230 100%);
+    }
+
+    Rectangle {
+        x: -parent.width * 0.3;
+        y: -parent.height * 0.6;
+        width: parent.width * 1.2;
+        height: parent.height * 1.4;
+        background: @radial-gradient(circle, #3b82f626 0%, #3b82f600 60%);
+    }
+
+    if root.has-background-image: Image {
+        source: root.background-image;
+        width: parent.width;
+        height: parent.height;
+        image-fit: cover;
+    }
+    if root.has-background-image: Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000a6;
+    }
+
+    // Clock, top right.
+    time := Text {
+        text: root.clock-time;
+        x: parent.width - self.width - 64 * root.u;
+        y: 40 * root.u;
+        color: white;
+        font-size: 56 * root.u;
+        font-weight: 300;
+        opacity: root.home-opacity;
+    }
+
+    Text {
+        text: root.clock-date;
+        x: parent.width - self.width - 66 * root.u;
+        y: time.y + time.height;
+        color: #ffffffb3;
+        font-size: 24 * root.u;
+        opacity: root.home-opacity;
+    }
+
+    // App tiles.
+    Rectangle {
+        x: root.row-x;
+        y: parent.height * 0.56 - root.tile-h / 2;
+        width: root.row-width;
+        height: root.tile-h;
+        opacity: root.home-opacity;
+        animate x { duration: 250ms; easing: ease-out; }
+
+        for tile[i] in root.tiles: Tile {
+            x: i * (root.tile-w + root.gap);
+            y: 0;
+            u: root.u;
+            data: tile;
+            focused: i == root.focused;
+            hovered => {
+                if !root.input-locked && root.busy-text == "" {
+                    root.focused = i;
+                }
+            }
+            clicked => {
+                if !root.input-locked && root.busy-text == "" {
+                    root.focused = i;
+                    root.activate-focused();
+                }
+            }
+        }
+    }
+
+    // "Opening <name>…" with a spinner, over the bare background.
+    if root.busy-text != "": Rectangle {
+        width: 100%;
+        height: 100%;
+
+        spinner := Path {
+            width: 72 * root.u;
+            height: 72 * root.u;
+            x: (parent.width - self.width) / 2;
+            y: parent.height * 0.5 - self.height - 24 * root.u;
+            viewbox-width: 100;
+            viewbox-height: 100;
+            stroke: white;
+            stroke-width: 7 * root.u;
+            transform-rotation: mod(animation-tick() / 1ms, 1000) * 0.36deg;
+
+            MoveTo {
+                x: 50;
+                y: 6;
+            }
+
+            ArcTo {
+                x: 6;
+                y: 50;
+                radius-x: 44;
+                radius-y: 44;
+                large-arc: true;
+                sweep: true;
+            }
+        }
+
+        Text {
+            text: root.busy-text;
+            x: (parent.width - self.width) / 2;
+            y: parent.height * 0.5 + 16 * root.u;
+            color: white;
+            font-size: 40 * root.u;
+        }
+    }
+
+    // Error toast, bottom center.
+    toast := Rectangle {
+        width: toast-label.preferred-width + 72 * root.u;
+        height: 76 * root.u;
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - 80 * root.u;
+        border-radius: self.height / 2;
+        background: #8b1d1df0;
+        opacity: root.toast-text != "" ? 1.0 : 0.0;
+        animate opacity { duration: 200ms; }
+
+        toast-label := Text {
+            text: root.toast-text;
+            x: 36 * root.u;
+            y: (parent.height - self.height) / 2;
+            color: white;
+            font-size: 28 * root.u;
+        }
+    }
+
+    // Full-screen config error.
+    if root.error-title != "": Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #0d1117;
+
+        Text {
+            text: root.error-title;
+            x: 120 * root.u;
+            y: 140 * root.u;
+            color: #ff8a80;
+            font-size: 52 * root.u;
+            font-weight: 600;
+        }
+
+        Text {
+            text: root.error-details;
+            x: 120 * root.u;
+            y: 240 * root.u;
+            width: parent.width - 240 * root.u;
+            color: #ffffffd9;
+            font-family: "DejaVu Sans Mono";
+            font-size: 26 * root.u;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "Fix the config, then run deploy.sh again.  Logs: journalctl -t mushtv-launcher";
+            x: 120 * root.u;
+            y: parent.height - self.height - 100 * root.u;
+            color: #ffffff80;
+            font-size: 24 * root.u;
+        }
+    }
+}

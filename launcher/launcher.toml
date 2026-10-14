@@ -1,0 +1,38 @@
+# mushtv launcher configuration.
+#
+# This file in the repo is the source of truth; `sudo ./deploy.sh` installs it
+# to /etc/mushtv/launcher.toml. Tiles appear in the order listed.
+
+[launcher]
+clock = "24h"                 # "24h" or "12h"
+home_keys = ["KEY_HOMEPAGE"]  # evdev key names that return to the launcher from any app
+guide_hold_ms = 1000          # hold a gamepad's Guide button this long to return home
+
+# Each tile:
+#   id            unique, [a-z0-9-]; app logs go to `journalctl -t mushtv-<id>`
+#   name          shown under the tile
+#   command       program and arguments (a list, not a shell string).
+#                 `flatpak run` commands get --die-with-parent added automatically.
+#   stop_command  optional; tried first when you press Home, before SIGTERM
+#   icon          optional; a path, relative to /usr/local/share/mushtv/.
+#                 Without it, Flatpak apps use their own icon.
+#   color         optional tile background, "#rrggbb"
+
+[[tile]]
+id = "youtube"
+name = "YouTube"
+command = ["flatpak", "run", "rocks.shy.VacuumTube", "--fullscreen"]
+color = "#1f1f1f"
+
+[[tile]]
+id = "jellyfin"
+name = "Jellyfin"
+command = ["flatpak", "run", "com.github.iwalton3.jellyfin-mpv-shim"]
+stop_command = ["flatpak", "run", "--command=jellyfin-mpv-shim", "com.github.iwalton3.jellyfin-mpv-shim", "stop"]
+color = "#101b2e"
+
+[[tile]]
+id = "moonlight"
+name = "Moonlight"
+command = ["flatpak", "run", "com.moonlight_stream.Moonlight"]
+color = "#14202b"

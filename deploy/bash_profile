@@ -1,0 +1,14 @@
+# mushtv: the tv user's login script. Installed by deploy.sh; edits here are
+# overwritten on the next deploy (edit deploy/bash_profile in the repo instead).
+
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+
+# On the TV's console, run the launcher full-screen under cage. When it exits
+# for any reason, logging out makes getty log tv back in and start it again.
+if [ "$(tty)" = "/dev/tty1" ]; then
+  cage -s -- /usr/local/bin/mushtv-launcher
+  # getty@tty1 allows 5 restarts per 10 s; pausing keeps a launcher that
+  # dies at startup retrying instead of hitting that limit and stopping.
+  sleep 3
+  exit
+fi
