@@ -93,16 +93,33 @@ scripts/headless.sh launcher/launcher.toml /tmp/shots my-scenario.sh [3840x2160]
 
 These can't be tested without the TV connected:
 
-- [ ] Boot: tty1 logs `tv` in and the launcher appears without a keyboard.
+- [x] Boot: tty1 logs `tv` in and the launcher appears without a keyboard.
 - [ ] Remote: arrows move focus, OK opens, Home returns from every app (`--print-input` should list the remote as `home_source`).
 - [ ] Gamepad: D-pad/stick and A work on the home screen. Holding Guide for 1 s returns home from each app, including during a Moonlight stream.
 - [ ] If a controller's Guide button shows up as `KEY_HOMEPAGE` in `--print-input`, a short press will go home. Consider removing that key from `home_keys`.
-- [ ] Each app: opens full-screen, has audio over HDMI, uses hardware decode (VacuumTube: `--debug-gpu`), and Home closes it within about 3 s.
-- [ ] jellyfin-mpv-shim: first login (keyboard needed once), server `http://localhost:10000`.
-- [ ] The launcher looks right and animates smoothly at the TV's real resolution (4K?).
-- [ ] Crash recovery: `sudo pkill -f mushtv-launcher` brings the launcher back within about 5 s.
-- [ ] Docker and SSH stay responsive while the TV is in use.
-- [ ] Settings → Bluetooth → Add device: pair a speaker and a controller; both show as paired and connected.
+- [x] Each app: opens full-screen, has audio over HDMI, uses hardware decode (VacuumTube: `--debug-gpu`), and Home closes it within about 3 s.
+- [x] jellyfin-mpv-shim: first login (keyboard needed once), server `http://localhost:10000`.
+- [x] The launcher looks right and animates smoothly at the TV's real resolution (4K?).
+- [x] Crash recovery: `sudo pkill -f mushtv-launcher` brings the launcher back within about 5 s.
+- [x] Docker and SSH stay responsive while the TV is in use.
+- [x] Settings → Bluetooth → Add device: pair a speaker and a controller; both show as paired and connected.
 - [ ] Settings → Audio output: switch to the speaker and back to TV while something plays; audio moves without restarting the app.
 - [ ] With the speaker chosen: turn it off (audio falls back to the TV), then on (audio returns to the speaker).
 - [ ] With the TV chosen: turn the speaker on; audio stays on the TV.
+
+## Roadmap
+
+Ideas for later, not yet scheduled:
+
+- **Two Bluetooth speakers as one output (stereo pair or party mode).**
+  - **How:** PipeWire 1.4.2's `libpipewire-module-combine-stream` can feed one virtual output to several speakers. It can map channels per speaker (left to one, right to the other, or the full mix to both) and compensate for each speaker's latency (`combine.latency-compensate`). It would show up in Settings → Audio output as e.g. "Speaker pair".
+  - **Caveats:**
+    - Speakers buffer internally by amounts they don't report, so they may drift some milliseconds apart (blurred stereo, or an echo when both play the full mix).
+    - Both streams share the one radio, which is the same chip as the Wi-Fi.
+    - The Bluetooth 4.2 radio can't do Auracast/LE Audio.
+  - **First check** whether the speakers have their own stereo pairing (JBL PartyBoost, UE PartyUp, Sony, Bose…). If they do, link them to each other and connect just one; that already works and syncs better.
+  - **Plan:** a config-only experiment with two real speakers, listen for sync and dropouts, then a Settings option if it's good enough.
+- **Jellyfin backdrops on the home screen** (an Apple TV-style "top shelf").
+- **Display blanking when idle**, and TV power on/off over HDMI-CEC (needs a USB-CEC adapter).
+- **jellyfin-mpv-shim as an always-on cast target**, so phones can cast to the TV without opening the Jellyfin tile.
+- **Refresh-rate matching** for video (e.g. 24 Hz for films).
