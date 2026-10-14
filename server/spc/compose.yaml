@@ -11,8 +11,8 @@ services:
     # boot before wolf-prestart has set up the firewall and driver volume.
     restart: "no"
     env_file:
-      # WOLF_RENDER_NODE, the NVIDIA GPU's node (renderD128 is the AMD iGPU,
-      # and the numbering follows driver probe order); from wolf-prestart.
+      # WOLF_RENDER_NODE, the chosen GPU's node (by default the RTX 4060;
+      # the numbering follows driver probe order); from wolf-prestart.
       - /run/wolf/render.env
     environment:
       NVIDIA_DRIVER_VOLUME_NAME: nvidia-driver-vol
@@ -22,8 +22,9 @@ services:
     volumes:
       - /etc/wolf:/etc/wolf:rw
       # Wolf's runtime dir (its API and PulseAudio sockets), which Wolf mounts
-      # into app containers by host path, so it must exist on the host.
-      - /run/wolf/sockets:/tmp/sockets:rw
+      # into app containers by host path. Without this the image puts it in
+      # a new anonymous volume on every start.
+      - /run/wolf/sockets:/run/user/wolf:rw
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - /dev:/dev:rw
       - /run/udev:/run/udev:rw

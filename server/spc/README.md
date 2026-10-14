@@ -8,7 +8,7 @@ spc is the gaming PC (RTX 4060) that the TV streams games from with Moonlight. S
 
 Steam runs in its own container with its own home. Sign in once on the TV with one of the accounts in the Steam family, and both libraries appear. Games download separately from any Steam on spc's desktop.
 
-**Sharing the GPU:** while someone also plays at the desk, both games share the RTX 4060 and its 8 GB of video memory. Older or lighter games are fine side by side. Two demanding ones will both stutter, and running out of video memory can crash a game.
+**Sharing the GPU:** streams and the desk share the RTX 4060 and its 8 GB of video memory. A game at the desk can take most of that memory (one took 5.8 GB), and then a stream can't even start: Wolf's encoder fails with `CUDA_ERROR_OUT_OF_MEMORY` in `docker logs wolf`, and Moonlight says "No video received from host". Streaming alongside desktop use (browsing, video) is fine; alongside a game, only if both are light. Wolf uses one GPU for everything, so it can't fall back to the Ryzen's iGPU on its own; see **Choosing the GPU** below.
 
 ## What's here
 
@@ -27,7 +27,7 @@ Steam runs in its own container with its own home. Sign in once on the TV with o
 Before every start, `wolf-prestart`:
 
 - **Firewall:** opens Wolf's ports (TCP 47984, 47989, 48010; UDP 47999, 48100, 48200) on Tailscale and loopback only. Its own nftables table `inet wolf` drops them everywhere else, because spc's Wi-Fi is shared with the building. ufw stays off as before.
-- **GPU node:** finds the NVIDIA render node (`renderD128` is the AMD iGPU) and passes it to Wolf.
+- **GPU node:** finds the chosen GPU's render node (their numbering follows driver probe order) and passes it to Wolf.
 - **Driver volume:** rebuilds it when the loaded NVIDIA driver no longer matches. Wolf's containers can't use the host's driver directly. Ubuntu updates the driver on its own, so without this Wolf would show a black screen after the next reboot.
 
 ## Setup
@@ -48,4 +48,5 @@ To pair a Moonlight client, start pairing on the client and note its PIN. Then l
 - **Address:** clients reach it over Tailscale as `spc`. Moonlight treats Tailscale addresses as remote and keeps packets small enough for it.
 - **Leaving:** closing Moonlight (or pressing Home on the TV) disconnects but leaves the game running; reconnecting resumes it. To end the session, exit Steam (Power → Exit Steam) or quit the app from Moonlight.
 - **Logs:** `journalctl -u wolf` on spc, or `docker logs -f wolf`.
+- **Choosing the GPU:** `sudo bash setup.sh --gpu amdgpu` runs Wolf on the Ryzen's built-in AMD graphics. It uses system RAM, so streams never touch the RTX 4060 or a game at the desk, but it's weak: fine for light games, not modern 3D. `--gpu nvidia` goes back to the RTX 4060 (the default). The choice is a drop-in, `/etc/systemd/system/wolf.service.d/gpu.conf`, and Wolf's log names the encoder it picked (`nvcodec` or `va`).
 - **Stop or start:** `sudo systemctl stop wolf` and `sudo systemctl start wolf`. Remove it with `sudo systemctl disable --now wolf`, then delete the installed files above.

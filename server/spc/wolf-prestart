@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs as root before Wolf starts (ExecStartPre in wolf.service):
 #  1. firewall: Wolf's ports answer only over Tailscale;
-#  2. tells Wolf which render node is the NVIDIA GPU;
+#  2. tells Wolf which render node is the chosen GPU;
 #  3. rebuilds the NVIDIA driver volume when the loaded driver has changed.
 set -euo pipefail
 
@@ -20,15 +20,19 @@ table inet wolf {
 }
 EOF
 
-# 2. The render node numbers follow driver probe order, so look it up.
+# 2. Wolf renders and encodes on one GPU, named by its kernel driver:
+# nvidia (the RTX 4060, the default) or amdgpu (the Ryzen's iGPU, which
+# leaves the RTX 4060's memory to the desk). setup.sh --gpu sets WOLF_GPU.
+# The render node numbers follow driver probe order, so look it up.
+gpu=${WOLF_GPU:-nvidia}
 node=
 for r in /sys/class/drm/renderD*; do
-	if [ "$(basename "$(readlink -f "$r/device/driver")")" = nvidia ]; then
+	if [ "$(basename "$(readlink -f "$r/device/driver")")" = "$gpu" ]; then
 		node=/dev/dri/$(basename "$r")
 	fi
 done
 if [ -z "$node" ]; then
-	echo "wolf-prestart: no NVIDIA render node" >&2
+	echo "wolf-prestart: no render node for GPU driver '$gpu'" >&2
 	exit 1
 fi
 install -d -m 755 /run/wolf /run/wolf/sockets
