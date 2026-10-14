@@ -62,17 +62,24 @@ as_tv() {
 # Replace a file in tv's home. Everything happens as tv, with the content
 # piped in, so a symlink tv planted can't make root read or write anything
 # tv couldn't. Renames replace links instead of writing through them.
+# Returns 10 if the file was new or changed.
 install_tv_file() {  # src dst
   as_tv sh -c '
     dst="$1"
+    mkdir -p "$(dirname "$dst")"
     cat > "$dst.new"
     chmod 644 "$dst.new"
-    if [ -e "$dst" ] && ! cmp -s "$dst.new" "$dst"; then
+    changed=0
+    if [ ! -e "$dst" ]; then
+      changed=10
+    elif ! cmp -s "$dst.new" "$dst"; then
       echo "== updating $dst:"
       diff -u "$dst" "$dst.new" || true
       cp -- "$dst" "$dst.bak.new" && mv -f -- "$dst.bak.new" "$dst.bak"
+      changed=10
     fi
     mv -f -- "$dst.new" "$dst"
+    exit $changed
   ' sh "$2" < "$1"
 }
 
@@ -91,10 +98,22 @@ if [ -n "$dest" ]; then
   ensure_dir "$dest$tv_home"
 fi
 [ -d "$dest$tv_home" ] || die "tv's home $tv_home doesn't exist"
-install_tv_file "$repo/deploy/bash_profile" "$dest$tv_home/.bash_profile"
+install_tv_file "$repo/deploy/bash_profile" "$dest$tv_home/.bash_profile" || [ $? -eq 10 ]
+audio_rc=0
+install_tv_file "$repo/deploy/wireplumber-hdmi.conf" \
+  "$dest$tv_home/.config/wireplumber/wireplumber.conf.d/51-mushtv-hdmi.conf" || audio_rc=$?
+[ "$audio_rc" -eq 0 ] || [ "$audio_rc" -eq 10 ] || die "couldn't install the audio config"
 
 if [ -z "$dest" ]; then
   systemctl daemon-reload
+  # Apply a changed audio config now: restarting tv's WirePlumber moves any
+  # playing audio to the new output (a short blip), without closing the app.
+  # Needed even with --restart: logind keeps tv's user services (PipeWire,
+  # WirePlumber) alive for 10 s after logout, and autologin is back sooner.
+  if [ "$audio_rc" -eq 10 ]; then
+    echo "applying the audio config (restarting tv's WirePlumber)"
+    as_tv env XDG_RUNTIME_DIR="/run/user/$(id -u tv)" systemctl --user try-restart wireplumber || true
+  fi
   if $restart; then
     echo "restarting the TV session"
     systemctl restart getty@tty1

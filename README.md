@@ -34,6 +34,9 @@ The first deploy sets up autologin. Run it with `--restart`, or reboot, to switc
 | tile icons, `background.png`/`.jpg` (from `launcher/assets/share/`) | `/usr/local/share/mushtv/` |
 | autologin | `/etc/systemd/system/getty@tty1.service.d/autologin.conf` |
 | tv's login script (from `deploy/bash_profile`) | `/home/tv/.bash_profile` |
+| HDMI audio rule (from `deploy/wireplumber-hdmi.conf`) | `/home/tv/.config/wireplumber/wireplumber.conf.d/51-mushtv-hdmi.conf` |
+
+The onboard sound card exposes analog and HDMI as separate profiles, and PipeWire picks analog (the headphone jack) by default. The audio rule makes the TV session prefer HDMI. When it changes, deploy restarts tv's WirePlumber, so audio moves over straight away.
 
 `launcher/launcher.toml` in the repo is the source of truth. If the installed copy was edited by hand, deploy shows the diff and keeps a `.bak` before replacing it.
 

@@ -20,6 +20,8 @@ check "binary installed 755" test "$(stat -c %a "$s/usr/local/bin/mushtv-launche
 check "config installed 644" test "$(stat -c %a "$s/etc/mushtv/launcher.toml")" = 644
 check "autologin installed" test -f "$s/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 check "bash_profile installed" test -f "$s/home/tv/.bash_profile"
+wp="$s/home/tv/.config/wireplumber/wireplumber.conf.d/51-mushtv-hdmi.conf"
+check "HDMI audio rule installed 644" test "$(stat -c %a "$wp" 2>/dev/null)" = 644
 
 # A second run changes nothing.
 deploy "$s"
