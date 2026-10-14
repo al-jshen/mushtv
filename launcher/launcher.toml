@@ -1,11 +1,12 @@
 # mushtv launcher configuration.
 #
 # This file in the repo is the source of truth; `sudo ./deploy.sh` installs it
-# to /etc/mushtv/launcher.toml. Tiles appear in the order listed.
+# to /etc/mushtv/launcher.toml. Tiles appear in the order listed, in even rows
+# of up to five (Up/Down move between rows).
 
 [launcher]
 clock = "24h"                 # "24h" or "12h"
-home_keys = ["KEY_HOMEPAGE"]  # evdev key names that return to the launcher from any app
+home_keys = ["KEY_HOMEPAGE", "KEY_F12"]  # evdev key names that return to the launcher from any app
 guide_hold_ms = 1000          # hold a gamepad's Guide button this long to return home
 
 # Each tile:
@@ -31,6 +32,17 @@ name = "Jellyfin"
 command = ["flatpak", "run", "com.github.iwalton3.jellyfin-mpv-shim"]
 stop_command = ["flatpak", "run", "--command=jellyfin-mpv-shim", "com.github.iwalton3.jellyfin-mpv-shim", "stop"]
 color = "#101b2e"
+
+# Streams Steam from the gaming PC (Wolf on spc, see server/spc/README.md)
+# over Tailscale. Home disconnects but leaves the game running on spc
+# (--no-quit-after); exiting Steam ends the session and returns here.
+[[tile]]
+id = "steam"
+name = "Steam"
+command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc", "Steam",
+           "--1080", "--fps", "60", "--display-mode", "fullscreen", "--multi-controller", "--no-quit-after"]
+icon = "steam.svg"
+color = "#1b2838"
 
 [[tile]]
 id = "moonlight"

@@ -441,7 +441,9 @@ fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
     match action {
         Action::Left => ui.invoke_move_focus(-1),
         Action::Right => ui.invoke_move_focus(1),
-        Action::Up | Action::Down | Action::Back => {}
+        Action::Up => ui.invoke_move_row(-1),
+        Action::Down => ui.invoke_move_row(1),
+        Action::Back => {}
         Action::Activate => ui.invoke_activate_focused(),
         Action::Home => {
             if runner.is_active() {

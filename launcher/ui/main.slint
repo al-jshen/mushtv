@@ -44,11 +44,23 @@ export component MainWindow inherits Window {
     callback settings-hover(int);
     callback settings-click(int);
 
+    // Left/Right: within the focused tile's row.
     public function move-focus(delta: int) {
         if root.tiles.length == 0 || root.busy-text != "" || root.input-locked {
             return;
         }
-        root.focused = clamp(root.focused + delta, 0, root.tiles.length - 1);
+        root.focused = clamp(root.focused + delta, root.focused-row * root.cols,
+            min((root.focused-row + 1) * root.cols, root.tiles.length) - 1);
+    }
+
+    // Up/Down: to the same column of another row, or the last tile of a
+    // shorter last row.
+    public function move-row(delta: int) {
+        if root.tiles.length == 0 || root.busy-text != "" || root.input-locked {
+            return;
+        }
+        root.focused = min(clamp(root.focused-row + delta, 0, root.rows - 1) * root.cols + mod(root.focused, root.cols),
+            root.tiles.length - 1);
     }
 
     public function activate-focused() {
@@ -74,16 +86,30 @@ export component MainWindow inherits Window {
     property <length> u: self.height / 1080;
     property <length> gap: 48 * self.u;
     property <length> side-margin: 120 * self.u;
-    // Tiles shrink to fit the row (down to a minimum), then the row scrolls.
-    property <length> fit-w: (self.width - 2 * root.side-margin - max(0, root.tiles.length - 1) * root.gap) / max(1, root.tiles.length);
-    property <length> tile-w: clamp(root.fit-w, 260 * self.u, 360 * self.u);
+    // Tiles wrap into even rows of at most five (six tiles: 3 + 3, seven:
+    // 4 + 3), left-aligned so columns line up, and shrink to fit the width.
+    property <int> rows: max(1, ceil(root.tiles.length / 5));
+    property <int> cols: max(1, ceil(root.tiles.length / root.rows));
+    property <int> focused-row: floor(root.focused / root.cols);
+    property <length> fit-w: (self.width - 2 * root.side-margin - (root.cols - 1) * root.gap) / root.cols;
+    property <length> tile-w: min(root.fit-w, 360 * self.u);
     property <length> tile-h: root.tile-w * 0.6;
-    property <length> row-width: root.tiles.length * root.tile-w + max(0, root.tiles.length - 1) * root.gap;
-    // Centered when the row fits; otherwise scrolled to keep focus in view.
-    property <length> row-x: root.row-width <= self.width - 2 * root.side-margin
-        ? (self.width - root.row-width) / 2
-        : clamp(self.width / 2 - (root.focused * (root.tile-w + root.gap) + root.tile-w / 2),
-            self.width - root.side-margin - root.row-width, root.side-margin);
+    // Rows leave room for the focused tile's name underneath.
+    property <length> row-pitch: root.tile-h + 110 * self.u;
+    property <length> grid-w: root.cols * root.tile-w + (root.cols - 1) * root.gap;
+    property <length> grid-h: root.rows * root.row-pitch - (root.row-pitch - root.tile-h);
+    // Below the clock, with room under the last row for its name.
+    property <length> grid-top: 200 * self.u;
+    // A scrolled grid is clipped here, so it doesn't cover the clock (low
+    // enough to leave room for a focused tile's glow at grid-top).
+    property <length> grid-clip-top: 150 * self.u;
+    property <length> grid-bottom: self.height - 110 * self.u;
+    // Centered a little below the middle; a grid too tall for the screen
+    // scrolls to keep the focused row in view.
+    property <length> grid-y: root.grid-h <= root.grid-bottom - root.grid-top
+        ? clamp(self.height * 0.56 - root.grid-h / 2, root.grid-top, root.grid-bottom - root.grid-h)
+        : clamp(self.height * 0.56 - (root.focused-row * root.row-pitch + root.tile-h / 2),
+            root.grid-bottom - root.grid-h, root.grid-top);
 
     keys := FocusScope {
         width: 100%;
@@ -121,6 +147,14 @@ export component MainWindow inherits Window {
             }
             if event.text == Key.RightArrow {
                 root.move-focus(1);
+                return accept;
+            }
+            if event.text == Key.UpArrow {
+                root.move-row(-1);
+                return accept;
+            }
+            if event.text == Key.DownArrow {
+                root.move-row(1);
                 return accept;
             }
             if event.text == Key.Return || event.text == "\n" || event.text == "\u{d}" || event.text == Key.Space {
@@ -184,32 +218,39 @@ export component MainWindow inherits Window {
 
     // App tiles.
     Rectangle {
-        x: root.row-x;
-        y: parent.height * 0.56 - root.tile-h / 2;
-        width: root.row-width;
-        height: root.tile-h;
+        y: root.grid-clip-top;
+        width: parent.width;
+        height: parent.height - root.grid-clip-top;
+        clip: true;
         opacity: root.home-opacity;
-        animate x { duration: 250ms; easing: ease-out; }
 
-        for tile[i] in root.tiles: Tile {
-            x: i * (root.tile-w + root.gap);
-            y: 0;
-            width: root.tile-w;
-            height: root.tile-h;
-            u: root.u;
-            data: tile;
-            focused: i == root.focused;
-            // Hidden (opacity 0) while Settings or "Opening…" is up, but
-            // still under the pointer: ignore it then.
-            hovered => {
-                if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
-                    root.focused = i;
+        Rectangle {
+            x: (parent.width - root.grid-w) / 2;
+            y: root.grid-y - root.grid-clip-top;
+            width: root.grid-w;
+            height: root.grid-h;
+            animate y { duration: 250ms; easing: ease-out; }
+
+            for tile[i] in root.tiles: Tile {
+                x: mod(i, root.cols) * (root.tile-w + root.gap);
+                y: floor(i / root.cols) * root.row-pitch;
+                width: root.tile-w;
+                height: root.tile-h;
+                u: root.u;
+                data: tile;
+                focused: i == root.focused;
+                // Hidden (opacity 0) while Settings or "Opening…" is up, but
+                // still under the pointer: ignore it then.
+                hovered => {
+                    if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
+                        root.focused = i;
+                    }
                 }
-            }
-            clicked => {
-                if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
-                    root.focused = i;
-                    root.activate-focused();
+                clicked => {
+                    if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
+                        root.focused = i;
+                        root.activate-focused();
+                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
 # mushtv
 
-TV on substrate: the homelab box boots into a full-screen, remote-friendly launcher on the living-room TV. The launcher has tiles for YouTube (VacuumTube), Jellyfin (jellyfin-mpv-shim) and Moonlight. The server workloads keep running underneath.
+TV on substrate: the homelab box boots into a full-screen, remote-friendly launcher on the living-room TV. The launcher has tiles for YouTube (VacuumTube), Jellyfin (jellyfin-mpv-shim), Steam (streamed from the gaming PC) and Moonlight. The server workloads keep running underneath.
 
 - Background and decisions: `handoff.md`, `docs/superpowers/specs/2026-10-13-tv-launcher-design.md`
 - Launcher source: `launcher/` (Rust + Slint)
@@ -13,7 +13,7 @@ systemd → getty@tty1 (autologin tv) → ~tv/.bash_profile → cage → mushtv-
 
 - **cage** shows the newest window full-screen. When an app exits, the launcher is back on screen.
 - **Home:**
-  - The Home key on a remote (`KEY_HOMEPAGE` by default), or holding a gamepad's Guide button for 1 s, closes the running app.
+  - The Home key on a remote (`KEY_HOMEPAGE`), F12 on a keyboard, or holding a gamepad's Guide button for 1 s closes the running app.
   - The launcher reads these straight from `/dev/input`, so they work whichever app is in front.
 - **If the launcher dies,** the login session ends and getty starts it again.
 
@@ -70,6 +70,17 @@ It runs [UxPlay](https://github.com/FDH2/UxPlay) with GPU decoding (frames stay 
 
 When the receiver starts, Home Assistant or Music Assistant on this box may briefly probe it (they look for AirPlay devices). That's harmless and ignored.
 
+## Games (Steam)
+
+The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC, spc, with Moonlight. It runs `moonlight stream spc Steam` at 1080p and 60 fps, over Tailscale. On spc, [Wolf](server/spc/README.md) gives the TV its own invisible desktop, so someone can keep using spc's own screen at the same time.
+
+- **Home** (or F12) disconnects but leaves the game running on spc. Opening the tile again picks up where you left off.
+- **To end a session,** choose Power → Exit Steam in Steam. The stream closes and the TV returns to the tiles.
+- **Controllers, keyboard and mouse** are passed through to Steam. Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard.
+- **The Moonlight tile** opens Moonlight's own menus, which are useful for pairing or other hosts. After a stream ends there, its window can stay black; press Home.
+
+Setup, the GPU choice and limits are in [`server/spc/README.md`](server/spc/README.md). Moonlight's log is `sudo journalctl -t mushtv-steam`.
+
 ## Adding a tile
 
 Add a `[[tile]]` to `launcher/launcher.toml`. The comments in that file list every field. Then check it, build and deploy:
@@ -124,6 +135,9 @@ These can't be tested without the TV connected:
 - [ ] Mirroring again from the same Mac: no code asked.
 - [ ] Stopping mirroring on the Mac returns the TV to the tiles; so does Home during mirroring, and Back on the waiting screen.
 - [ ] Settings → Mirroring → Smooth playback: the next session plays video more smoothly, with more lag; Low lag returns to responsive.
+- [ ] Steam tile: Steam's TV interface appears; keyboard, mouse and a controller all work in it.
+- [ ] Steam tile: Home (and F12) returns to the tiles; opening the tile again resumes the same game.
+- [ ] Steam tile: Power → Exit Steam returns the TV to the tiles.
 
 ## Roadmap
 
