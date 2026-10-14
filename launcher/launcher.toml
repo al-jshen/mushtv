@@ -22,6 +22,7 @@ guide_hold_ms = 1000          # hold a gamepad's Guide button this long to retur
 id = "youtube"
 name = "YouTube"
 command = ["flatpak", "run", "rocks.shy.VacuumTube", "--fullscreen"]
+icon = "youtube.svg"
 color = "#1f1f1f"
 
 [[tile]]
