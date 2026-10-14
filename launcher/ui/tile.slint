@@ -7,7 +7,7 @@ export struct TileData {
     glyph: string,
 }
 
-// One app tile. Sized at 360×216 design units; the focused tile grows to
+// One app tile (the row sets its size, at most 360×216 design units); the focused tile grows to
 // 1.12× with a white border and glow, and shows its name underneath.
 export component Tile inherits Rectangle {
     in property <TileData> data;
@@ -39,7 +39,7 @@ export component Tile inherits Rectangle {
             height: parent.height;
             color: white;
             font-family: "Material Icons";
-            font-size: 120 * root.u;
+            font-size: parent.height * 0.55;
             horizontal-alignment: center;
             vertical-alignment: center;
         }

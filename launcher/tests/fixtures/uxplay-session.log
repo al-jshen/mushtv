@@ -1,0 +1,74 @@
+UxPlay 1.71: An Open-Source AirPlay mirroring and audio-streaming server.
+
+(uxplay:1575902): GStreamer-Wayland-CRITICAL **: 12:01:37.366: gst_wl_window_ensure_fullscreen: assertion 'self' failed
+
+(uxplay:1575902): GStreamer-Wayland-WARNING **: 12:01:37.376: Could not bind to zwp_linux_dmabuf_v1
+using network ports UDP 7011 6001 6000 TCP 7100 7000 7001
+using system MAC address 00:11:22:33:44:55
+Initialized server socket(s)
+Accepted IPv4 client on socket 27
+Local : 192.168.1.10
+Remote: 192.168.1.10
+ignoring AirPlay video streaming request (use option -hls to activate HLS support)
+*** WARNING: httpd didn't get response
+Connection closed for socket 27
+Connection closed for socket 27
+Accepted IPv6 client on socket 27
+Local : fe80::2%4
+Remote: fe80::1%4
+client sent PAIR-PIN-START request
+
+          8888888888    .d8888b.     .d8888b.     .8888d.     
+                d88P   d88P  Y88b   d88P  Y88b   d88P  Y88b   
+               d88P    888    888        .d88P          888   
+              d88P     Y88b. d888       8888"         .d88P   
+             d88P       "Y888P888        "Y8b     .od888P"    
+            d88P              888   888    888   d88P"        
+           d88P        Y88b  d88P   Y88b  d88P   888"         
+          d88P          "Y8888P"     "Y8888P"    8888888888   
+
+
+
+*** CLIENT MUST NOW ENTER PIN = "7932" AS AIRPLAY PASSWORD
+Connection closed for socket 27
+Connection closed for socket 27
+Accepted IPv6 client on socket 27
+Local : fe80::2%4
+Remote: fe80::1%4
+client requested pair-setup-pin, datalen = 86
+request header: Content-Length: 86
+Content-Type: application/x-apple-binary-plist
+CSeq: 1
+DACP-ID: 0000000000000000
+Active-Remote: 0000000000
+User-Agent: AirPlay/960.13.1
+
+pair-setup-pin:  device_id = AA:BB:CC:DD:EE:FF
+client requested pair-setup-pin, datalen = 347
+request header: Content-Length: 347
+Content-Type: application/x-apple-binary-plist
+CSeq: 2
+DACP-ID: 0000000000000000
+Active-Remote: 0000000000
+User-Agent: AirPlay/960.13.1
+
+client requested pair-setup-pin, datalen = 116
+request header: Content-Length: 116
+Content-Type: application/x-apple-binary-plist
+CSeq: 3
+DACP-ID: 0000000000000000
+Active-Remote: 0000000000
+User-Agent: AirPlay/960.13.1
+
+connection request from Living Room Mac (MacBookPro18,3) with deviceID = AA:BB:CC:DD:EE:FF
+
+Client identified as User-Agent: AirPlay/960.13.1
+raop_rtp_mirror starting mirroring
+Begin streaming to GStreamer video pipeline
+raop_rtp_mirror->running is no longer true
+Connection closed for socket 27
+Connection closed for socket 27
+
+(uxplay:1575902): GStreamer-Wayland-CRITICAL **: 12:03:17.646: gst_wl_window_ensure_fullscreen: assertion 'self' failed
+
+(uxplay:1575902): GStreamer-Wayland-WARNING **: 12:03:17.667: Could not bind to zwp_linux_dmabuf_v1

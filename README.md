@@ -56,6 +56,20 @@ Needs `bluez` and `libspa-0.2-bluetooth` (installed). Bluetooth logs go to `sudo
 
 `launcher/launcher.toml` in the repo is the source of truth. If the installed copy was edited by hand, deploy shows the diff and keeps a `.bak` before replacing it.
 
+## Mirroring
+
+The **Mirroring** tile turns the TV into an AirPlay screen for a Mac, but only while that screen is open. Nothing on the network can see it otherwise.
+
+- **To connect:** on the Mac, Control Center → Screen Mirroring → **mushtv**. Change the name with `[mirroring] name` in `launcher/launcher.toml`.
+- **The first time a Mac connects,** the TV shows a 4-digit code to type on the Mac. After that, that Mac connects without a code.
+- **For the sharpest picture,** choose **Use As Separate Display** on the Mac instead of mirroring its built-in screen. The TV is 1080p; mirroring squeezes the MacBook's 16:10 Retina screen and softens text.
+- **Stopping:** stop mirroring on the Mac, or press Home (or Back on the waiting screen). Both return to the tiles and close the receiver.
+- **Settings → Mirroring:** **Low lag** (default) is responsive but video can hitch a little. **Smooth playback** syncs audio and video at the cost of about half a second of lag. The choice is saved in `~/.local/state/mushtv/settings.toml` (tv's home) and applies the next time Mirroring opens.
+
+It runs [UxPlay](https://github.com/FDH2/UxPlay) with GPU decoding (frames stay on the GPU all the way to the screen). It needs `uxplay`, `avahi-daemon` and `gstreamer1.0-plugins-bad` (installed). Its log lines appear in `sudo journalctl -t mushtv-launcher` prefixed with `mirroring:`.
+
+When the receiver starts, Home Assistant or Music Assistant on this box may briefly probe it (they look for AirPlay devices). That's harmless and ignored.
+
 ## Adding a tile
 
 Add a `[[tile]]` to `launcher/launcher.toml`. The comments in that file list every field. Then check it, build and deploy:
@@ -106,6 +120,10 @@ These can't be tested without the TV connected:
 - [ ] Settings → Audio output: switch to the speaker and back to TV while something plays; audio moves without restarting the app.
 - [ ] With the speaker chosen: turn it off (audio falls back to the TV), then on (audio returns to the speaker).
 - [ ] With the TV chosen: turn the speaker on; audio stays on the TV.
+- [ ] Mirroring: a new Mac is asked for the code shown on the TV; once entered, the Mac's picture fills the TV.
+- [ ] Mirroring again from the same Mac: no code asked.
+- [ ] Stopping mirroring on the Mac returns the TV to the tiles; so does Home during mirroring, and Back on the waiting screen.
+- [ ] Settings → Mirroring → Smooth playback: the next session plays video more smoothly, with more lag; Low lag returns to responsive.
 
 ## Roadmap
 

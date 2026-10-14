@@ -18,6 +18,8 @@ pub struct Config {
     pub home_keys: Vec<KeyCode>,
     pub guide_hold: Duration,
     pub tiles: Vec<Tile>,
+    /// The name Macs see in Screen Mirroring.
+    pub mirroring_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +79,12 @@ pub fn parse(text: &str, icon_roots: &IconRoots) -> Result<Config> {
         bail!("[launcher] guide_hold_ms must be between 300 and 5000, not {guide_hold_ms}");
     }
 
+    let mirroring_name = match raw.mirroring.name {
+        None => "mushtv".to_string(),
+        Some(name) if name.trim().is_empty() => bail!("[mirroring] name must not be empty"),
+        Some(name) => name.trim().to_string(),
+    };
+
     if raw.tiles.is_empty() {
         bail!("the config needs at least one [[tile]]");
     }
@@ -122,6 +130,7 @@ pub fn parse(text: &str, icon_roots: &IconRoots) -> Result<Config> {
         home_keys,
         guide_hold: Duration::from_millis(guide_hold_ms),
         tiles,
+        mirroring_name,
     })
 }
 
@@ -206,6 +215,14 @@ struct RawConfig {
     launcher: RawLauncher,
     #[serde(default, rename = "tile")]
     tiles: Vec<RawTile>,
+    #[serde(default)]
+    mirroring: RawMirroring,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct RawMirroring {
+    name: Option<String>,
 }
 
 #[derive(serde::Deserialize, Default)]
@@ -509,6 +526,30 @@ mod tests {
             load(Path::new("/nonexistent/launcher.toml"), &no_icons()).unwrap_err()
         );
         assert!(e.contains("/nonexistent/launcher.toml"), "{e}");
+    }
+
+    #[test]
+    fn mirroring_name_defaults_to_mushtv() {
+        assert_eq!(
+            parse(MINIMAL, &no_icons()).unwrap().mirroring_name,
+            "mushtv"
+        );
+    }
+
+    #[test]
+    fn mirroring_name_can_be_set() {
+        let c = parse(
+            &format!("[mirroring]\nname = \"Living room\"\n{MINIMAL}"),
+            &no_icons(),
+        )
+        .unwrap();
+        assert_eq!(c.mirroring_name, "Living room");
+    }
+
+    #[test]
+    fn empty_mirroring_name_is_rejected() {
+        let e = err_of(&format!("[mirroring]\nname = \"  \"\n{MINIMAL}"));
+        assert!(e.contains("[mirroring] name"), "{e}");
     }
 
     #[test]

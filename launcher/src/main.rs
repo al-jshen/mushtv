@@ -2,6 +2,9 @@ mod audio;
 mod bluetooth;
 mod config;
 mod input;
+mod mirroring;
+mod mirroring_ui;
+mod prefs;
 mod runner;
 mod settings;
 mod settings_ui;
@@ -19,7 +22,7 @@ use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel};
 
 use config::{ClockStyle, Config, IconRoots, Tile};
 use input::{Action, InputHandle};
-use runner::{RunEvent, Runner};
+use runner::{App, RunEvent, Runner};
 
 const DEFAULT_CONFIG: &str = "/etc/mushtv/launcher.toml";
 const ASSETS_DIR: &str = "/usr/local/share/mushtv";
@@ -83,6 +86,18 @@ where
         ClockStyle::H12 => now.format("%-I:%M %p"),
     };
     (time.to_string(), now.format("%a %-d %b").to_string())
+}
+
+/// The "cast" glyph (Material Icons) for the built-in Mirroring tile.
+const MIRRORING_GLYPH: &str = "\u{e307}";
+
+/// The toast when an app fails to start or dies right away.
+fn failure_toast(app: App, name: &str, spawn_failed: bool) -> String {
+    match (app, spawn_failed) {
+        (App::Mirroring, _) => "Couldn't start mirroring".to_string(),
+        (App::Tile(_), true) => format!("Couldn't open {name}"),
+        (App::Tile(_), false) => format!("{name} closed unexpectedly"),
+    }
 }
 
 /// Tile background: the configured color, else one from a fixed palette.
@@ -186,12 +201,20 @@ fn run(config_path: &Path) -> Result<()> {
                 home_keys: vec![evdev::KeyCode::KEY_HOMEPAGE],
                 guide_hold: Duration::from_millis(1000),
                 tiles: vec![],
+                mirroring_name: "mushtv".to_string(),
             }
         }
     };
 
     let mut tile_data = tile_models(&config.tiles);
     if ui.get_error_title().is_empty() {
+        tile_data.push(TileData {
+            name: "Mirroring".into(),
+            icon: slint::Image::default(),
+            has_icon: false,
+            color: slint::Color::from_rgb_u8(0x24, 0x2c, 0x3e),
+            glyph: MIRRORING_GLYPH.into(),
+        });
         tile_data.push(TileData {
             name: "Settings".into(),
             icon: slint::Image::default(),
@@ -201,7 +224,9 @@ fn run(config_path: &Path) -> Result<()> {
         });
     }
     ui.set_tiles(ModelRc::from(Rc::new(VecModel::from(tile_data))));
-    settings_ui::init(&ui);
+    let prefs_path = prefs::default_path();
+    let prefs = prefs_path.as_deref().map(prefs::load).unwrap_or_default();
+    settings_ui::init(&ui, prefs_path, prefs);
     if let Some(bg) = background_path(Path::new(ASSETS_DIR)) {
         match slint::Image::load_from_path(&bg) {
             Ok(image) => {
@@ -260,6 +285,12 @@ fn run(config_path: &Path) -> Result<()> {
         }
     });
     let _ = input_slot.set(input.clone());
+    mirroring_ui::init(
+        &ui,
+        Arc::clone(&runner),
+        Arc::clone(&input_slot),
+        config.mirroring_name.clone(),
+    );
 
     ui.on_activate({
         let weak = ui.as_weak();
@@ -269,10 +300,15 @@ fn run(config_path: &Path) -> Result<()> {
             let (Some(ui), Ok(index)) = (weak.upgrade(), usize::try_from(index)) else {
                 return;
             };
-            if settings_ui::is_open() {
+            if settings_ui::is_open() || mirroring_ui::is_open() {
                 return; // a hidden tile under the pointer
             }
+            // Built-in tiles come after the configured apps.
             if index == tiles.len() {
+                mirroring_ui::open();
+                return;
+            }
+            if index == tiles.len() + 1 {
                 settings_ui::open();
                 return;
             }
@@ -341,6 +377,9 @@ fn tile_models(tiles: &[Tile]) -> Vec<TileData> {
 }
 
 fn on_run_event(ui: &MainWindow, tiles: &[Tile], input: Option<&InputHandle>, event: RunEvent) {
+    let event_app = match &event {
+        RunEvent::Exited { app, .. } | RunEvent::SpawnError { app, .. } => *app,
+    };
     ui.set_busy_text(SharedString::new());
     if let Some(input) = input {
         input.set_app_active(false);
@@ -354,22 +393,39 @@ fn on_run_event(ui: &MainWindow, tiles: &[Tile], input: Option<&InputHandle>, ev
         }
     });
 
-    let name = |i: usize| tiles.get(i).map_or("the app", |t| t.name.as_str());
+    let name = |app: App| match app {
+        App::Tile(i) => tiles.get(i).map_or("the app", |t| t.name.as_str()),
+        App::Mirroring => "Mirroring",
+    };
     match event {
-        RunEvent::Exited { tile, code, quick } => {
-            tracing::info!("{} exited (code {code:?})", name(tile));
+        RunEvent::Exited { app, code, quick } => {
+            tracing::info!("{} exited (code {code:?})", name(app));
             if quick {
-                show_toast(ui, format!("{} closed unexpectedly", name(tile)));
+                show_toast(ui, failure_toast(app, name(app), false));
             }
         }
-        RunEvent::SpawnError { tile, error } => {
-            tracing::error!("couldn't open {}: {error}", name(tile));
-            show_toast(ui, format!("Couldn't open {}", name(tile)));
+        RunEvent::SpawnError { app, error } => {
+            tracing::error!("couldn't open {}: {error}", name(app));
+            show_toast(ui, failure_toast(app, name(app), true));
         }
+    }
+    if event_app == App::Mirroring {
+        mirroring_ui::on_exit();
     }
 }
 
 fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
+    if mirroring_ui::is_open() {
+        match action {
+            Action::Back => mirroring_ui::back(),
+            Action::Home => {
+                tracing::info!("home: stopping mirroring");
+                runner.stop();
+            }
+            _ => {}
+        }
+        return;
+    }
     if settings_ui::is_open() {
         let nav = match action {
             Action::Up => settings::Nav::Up,
@@ -528,6 +584,26 @@ mod tests {
         let result = finish(Err(anyhow::anyhow!("wayland connection lost")), &runner);
         assert!(result.is_err());
         assert!(!runner.is_active(), "the app was left running");
+    }
+
+    #[test]
+    fn failure_toasts() {
+        assert_eq!(
+            failure_toast(App::Tile(0), "YouTube", true),
+            "Couldn't open YouTube"
+        );
+        assert_eq!(
+            failure_toast(App::Tile(0), "YouTube", false),
+            "YouTube closed unexpectedly"
+        );
+        assert_eq!(
+            failure_toast(App::Mirroring, "Mirroring", true),
+            "Couldn't start mirroring"
+        );
+        assert_eq!(
+            failure_toast(App::Mirroring, "Mirroring", false),
+            "Couldn't start mirroring"
+        );
     }
 
     #[test]

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use crate::audio::{AudioState, OutputKind, bt_address_from_node_name};
 pub use crate::bluetooth::model::BtOp;
 use crate::bluetooth::model::{BtDevice, DeviceKind};
+use crate::mirroring::MirrorMode;
 
 /// How long to wait for a speaker's audio output after asking to connect it.
 pub const CONNECT_SWITCH_TIMEOUT: Duration = Duration::from_secs(15);
@@ -25,6 +26,7 @@ pub struct Snapshot {
     pub audio: Option<AudioState>,
     /// A passkey to show while pairing (keyboards).
     pub passkey: Option<String>,
+    pub mirroring_mode: MirrorMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +59,8 @@ pub enum Effect {
         fallback: Option<u32>,
     },
     Toast(String),
+    /// Save and use this mirroring mode.
+    SetMirroringMode(MirrorMode),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +77,9 @@ pub enum Icon {
     Connect,
     Disconnect,
     Forget,
+    Mirroring,
+    LowLag,
+    Smooth,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,6 +111,7 @@ enum Page {
         path: String,
     },
     Add,
+    Mirroring,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -285,6 +293,7 @@ impl Settings {
         let (title, status) = match self.top() {
             None | Some(Page::Menu) => ("Settings".to_string(), String::new()),
             Some(Page::Audio) => ("Audio output".to_string(), String::new()),
+            Some(Page::Mirroring) => ("Mirroring".to_string(), String::new()),
             Some(Page::Bluetooth) => (
                 "Bluetooth".to_string(),
                 if snap.bt_available {
@@ -379,6 +388,10 @@ impl Settings {
                     self.push(Page::Audio);
                     vec![]
                 }
+                2 => {
+                    self.push(Page::Mirroring);
+                    vec![]
+                }
                 _ => {
                     self.push(Page::Bluetooth);
                     if snap.bt_available {
@@ -470,6 +483,13 @@ impl Settings {
                     }
                 }
             }
+            Some(Page::Mirroring) => {
+                let mode = match focus {
+                    0 => MirrorMode::LowLag,
+                    _ => MirrorMode::Smooth,
+                };
+                vec![Effect::SetMirroringMode(mode)]
+            }
             Some(Page::Add) => {
                 let Some(device) = new_devices(snap).get(focus).cloned() else {
                     return vec![];
@@ -518,6 +538,13 @@ impl Settings {
                         false,
                     ),
                     row("bluetooth", Icon::Bluetooth, "Bluetooth", bt_detail, false),
+                    row(
+                        "mirroring",
+                        Icon::Mirroring,
+                        "Mirroring",
+                        snap.mirroring_mode.label().to_string(),
+                        false,
+                    ),
                 ]
             }
             Some(Page::Audio) => {
@@ -535,6 +562,21 @@ impl Settings {
                 }));
                 rows
             }
+            Some(Page::Mirroring) => [
+                ("low-lag", Icon::LowLag, MirrorMode::LowLag),
+                ("smooth", Icon::Smooth, MirrorMode::Smooth),
+            ]
+            .into_iter()
+            .map(|(key, icon, mode)| {
+                row(
+                    key,
+                    icon,
+                    mode.label(),
+                    String::new(),
+                    snap.mirroring_mode == mode,
+                )
+            })
+            .collect(),
             Some(Page::Bluetooth) => {
                 if !snap.bt_available {
                     return vec![];
@@ -749,6 +791,7 @@ mod tests {
                 configured: None,
             }),
             passkey: None,
+            mirroring_mode: MirrorMode::LowLag,
         }
     }
 
@@ -775,7 +818,7 @@ mod tests {
         assert!(st.is_open());
         let v = st.view(&snap());
         assert_eq!(v.title, "Settings");
-        assert_eq!(labels(&v), ["Audio output", "Bluetooth"]);
+        assert_eq!(labels(&v), ["Audio output", "Bluetooth", "Mirroring"]);
     }
 
     #[test]
@@ -838,7 +881,8 @@ mod tests {
         assert_eq!(st.view(&s).focused, 0);
         st.nav(Nav::Down, &s, now());
         st.nav(Nav::Down, &s, now());
-        assert_eq!(st.view(&s).focused, 1);
+        st.nav(Nav::Down, &s, now());
+        assert_eq!(st.view(&s).focused, 2, "clamped to the last menu row");
     }
 
     #[test]
@@ -1265,7 +1309,7 @@ mod tests {
         st.set_focus(1, &s);
         assert_eq!(st.view(&s).focused, 1);
         st.set_focus(9, &s);
-        assert_eq!(st.view(&s).focused, 1);
+        assert_eq!(st.view(&s).focused, 2);
     }
 
     #[test]
@@ -1421,6 +1465,61 @@ mod tests {
         let v = st.view(&s);
         assert_eq!(v.focused, 0);
         assert_eq!(v.rows[0].label, "Bose");
+    }
+
+    #[test]
+    fn menu_shows_the_mirroring_mode() {
+        let mut s = snap();
+        let st = open(&s);
+        assert_eq!(st.view(&s).rows[2].detail, "Low lag");
+        assert_eq!(st.view(&s).rows[2].icon, Icon::Mirroring);
+        s.mirroring_mode = MirrorMode::Smooth;
+        assert_eq!(st.view(&s).rows[2].detail, "Smooth playback");
+    }
+
+    fn to_mirroring_page(st: &mut Settings, s: &Snapshot) {
+        st.nav(Nav::Down, s, now());
+        st.nav(Nav::Down, s, now());
+        st.nav(Nav::Select, s, now());
+    }
+
+    #[test]
+    fn mirroring_page_checks_the_current_mode() {
+        let s = snap();
+        let mut st = open(&s);
+        to_mirroring_page(&mut st, &s);
+        let v = st.view(&s);
+        assert_eq!(v.title, "Mirroring");
+        assert_eq!(labels(&v), ["Low lag", "Smooth playback"]);
+        assert!(v.rows[0].checked && !v.rows[1].checked);
+    }
+
+    #[test]
+    fn choosing_a_mirroring_mode_sets_it() {
+        let s = snap();
+        let mut st = open(&s);
+        to_mirroring_page(&mut st, &s);
+        st.nav(Nav::Down, &s, now());
+        assert_eq!(
+            st.nav(Nav::Select, &s, now()),
+            vec![Effect::SetMirroringMode(MirrorMode::Smooth)]
+        );
+        st.nav(Nav::Up, &s, now());
+        assert_eq!(
+            st.nav(Nav::Select, &s, now()),
+            vec![Effect::SetMirroringMode(MirrorMode::LowLag)]
+        );
+    }
+
+    #[test]
+    fn back_from_mirroring_returns_to_its_menu_row() {
+        let s = snap();
+        let mut st = open(&s);
+        to_mirroring_page(&mut st, &s);
+        st.nav(Nav::Back, &s, now());
+        let v = st.view(&s);
+        assert_eq!(v.title, "Settings");
+        assert_eq!(v.focused, 2);
     }
 
     #[test]

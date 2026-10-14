@@ -1,5 +1,6 @@
 import { TileData, Tile } from "tile.slint";
 import { SettingsRow, SettingsPage } from "settings.slint";
+import { MirroringPage } from "mirroring.slint";
 import "../assets/fonts/MaterialIcons-Regular.ttf";
 import "../assets/fonts/Inter-Light.otf";
 import "../assets/fonts/Inter-Regular.otf";
@@ -34,6 +35,12 @@ export component MainWindow inherits Window {
     in property <int> settings-focused;
     // 0 up, 1 down, 2 select, 3 back.
     callback settings-nav(int);
+
+    // Mirroring screen.
+    in property <bool> mirroring-open;
+    in property <string> mirroring-name;
+    in property <string> mirroring-code;
+    callback mirroring-back();
     callback settings-hover(int);
     callback settings-click(int);
 
@@ -58,17 +65,19 @@ export component MainWindow inherits Window {
     background: #0d1117;
 
     // The home screen fades out while an app is opening.
-    property <float> home-opacity: root.busy-text != "" || root.settings-open ? 0.0 : 1.0;
+    property <float> home-opacity: root.busy-text != "" || root.settings-open || root.mirroring-open ? 0.0 : 1.0;
     animate home-opacity { duration: 200ms; }
     property <float> clock-opacity: root.busy-text != "" ? 0.0 : 1.0;
     animate clock-opacity { duration: 200ms; }
 
     // One design unit: the layout is designed at 1920×1080.
     property <length> u: self.height / 1080;
-    property <length> tile-w: 360 * self.u;
-    property <length> tile-h: 216 * self.u;
     property <length> gap: 48 * self.u;
     property <length> side-margin: 120 * self.u;
+    // Tiles shrink to fit the row (down to a minimum), then the row scrolls.
+    property <length> fit-w: (self.width - 2 * root.side-margin - max(0, root.tiles.length - 1) * root.gap) / max(1, root.tiles.length);
+    property <length> tile-w: clamp(root.fit-w, 260 * self.u, 360 * self.u);
+    property <length> tile-h: root.tile-w * 0.6;
     property <length> row-width: root.tiles.length * root.tile-w + max(0, root.tiles.length - 1) * root.gap;
     // Centered when the row fits; otherwise scrolled to keep focus in view.
     property <length> row-x: root.row-width <= self.width - 2 * root.side-margin
@@ -82,6 +91,12 @@ export component MainWindow inherits Window {
         key-pressed(event) => {
             if root.error-title != "" {
                 return reject;
+            }
+            if root.mirroring-open {
+                if !root.input-locked && (event.text == Key.Escape || event.text == Key.Backspace) {
+                    root.mirroring-back();
+                }
+                return accept;
             }
             if root.settings-open {
                 if root.input-locked {
@@ -179,23 +194,33 @@ export component MainWindow inherits Window {
         for tile[i] in root.tiles: Tile {
             x: i * (root.tile-w + root.gap);
             y: 0;
+            width: root.tile-w;
+            height: root.tile-h;
             u: root.u;
             data: tile;
             focused: i == root.focused;
             // Hidden (opacity 0) while Settings or "Opening…" is up, but
             // still under the pointer: ignore it then.
             hovered => {
-                if !root.input-locked && root.busy-text == "" && !root.settings-open {
+                if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
                     root.focused = i;
                 }
             }
             clicked => {
-                if !root.input-locked && root.busy-text == "" && !root.settings-open {
+                if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
                     root.focused = i;
                     root.activate-focused();
                 }
             }
         }
+    }
+
+    if root.mirroring-open: MirroringPage {
+        width: parent.width;
+        height: parent.height;
+        u: root.u;
+        name: root.mirroring-name;
+        code: root.mirroring-code;
     }
 
     if root.settings-open: SettingsPage {

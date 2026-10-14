@@ -12,6 +12,8 @@ use slint::{ComponentHandle, ModelRc, SharedString, Timer, TimerMode, VecModel, 
 
 use crate::audio;
 use crate::bluetooth::{self, BluetoothHandle, BtCmd, BtEvent};
+use crate::mirroring::MirrorMode;
+use crate::prefs::{self, Prefs};
 use crate::settings::{Effect, Icon, Nav, Settings, Snapshot};
 use crate::{MainWindow, SettingsRow};
 
@@ -24,6 +26,8 @@ struct Ctl {
     poll: Timer,
     audio_in_flight: Arc<AtomicBool>,
     weak: Weak<MainWindow>,
+    /// Where the launcher's own settings are saved (None: can't save).
+    prefs_path: Option<std::path::PathBuf>,
 }
 
 thread_local! {
@@ -35,7 +39,7 @@ fn with<R>(f: impl FnOnce(&mut Ctl) -> R) -> Option<R> {
 }
 
 /// Starts the Bluetooth worker and hooks up the Settings callbacks.
-pub fn init(ui: &MainWindow) {
+pub fn init(ui: &MainWindow, prefs_path: Option<std::path::PathBuf>, prefs: Prefs) {
     let weak = ui.as_weak();
     let bt = bluetooth::spawn({
         let weak = weak.clone();
@@ -48,11 +52,15 @@ pub fn init(ui: &MainWindow) {
     CTL.with(|ctl| {
         *ctl.borrow_mut() = Some(Ctl {
             settings: Settings::new(),
-            snap: Snapshot::default(),
+            snap: Snapshot {
+                mirroring_mode: prefs.mirroring_mode,
+                ..Snapshot::default()
+            },
             bt,
             poll: Timer::default(),
             audio_in_flight: Arc::new(AtomicBool::new(false)),
             weak,
+            prefs_path,
         })
     });
     ui.on_settings_nav(|code| {
@@ -80,6 +88,11 @@ pub fn init(ui: &MainWindow) {
         });
         nav_to(Nav::Select);
     });
+}
+
+/// The mirroring mode chosen in Settings (saved in the prefs file).
+pub fn mirroring_mode() -> MirrorMode {
+    with(|ctl| ctl.snap.mirroring_mode).unwrap_or_default()
 }
 
 pub fn is_open() -> bool {
@@ -168,6 +181,27 @@ impl Ctl {
                         }
                     }
                 },
+                Effect::SetMirroringMode(mode) => {
+                    self.snap.mirroring_mode = mode;
+                    let saved = match &self.prefs_path {
+                        Some(path) => prefs::save(
+                            path,
+                            &Prefs {
+                                mirroring_mode: mode,
+                            },
+                        ),
+                        None => Err(anyhow::anyhow!("no home directory to save settings in")),
+                    };
+                    match saved {
+                        Ok(()) => tracing::info!("mirroring mode: {}", mode.label()),
+                        Err(e) => {
+                            tracing::warn!("prefs: {e:#}");
+                            if let Some(ui) = self.ui() {
+                                crate::show_toast(&ui, "Couldn't save the setting".into());
+                            }
+                        }
+                    }
+                }
                 Effect::Toast(text) => {
                     if let Some(ui) = self.ui() {
                         crate::show_toast(&ui, text);
@@ -248,6 +282,9 @@ pub fn glyph(icon: Icon) -> &'static str {
         Icon::Connect => "\u{e1aa}",     // bluetooth_searching
         Icon::Disconnect => "\u{e16f}",  // link_off
         Icon::Forget => "\u{e872}",      // delete
+        Icon::Mirroring => "\u{e307}",   // cast
+        Icon::LowLag => "\u{ea0b}",      // bolt
+        Icon::Smooth => "\u{e02c}",      // movie
     }
 }
 

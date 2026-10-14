@@ -1,0 +1,74 @@
+// The Mirroring screen: how to connect from a Mac, and the pairing code
+// when a new Mac asks for one. The Mac's picture covers it while mirroring.
+export component MirroringPage inherits Rectangle {
+    // The receiver's name, as the Mac shows it.
+    in property <string> name;
+    // The 4-digit code a new Mac must enter; "" when none is requested.
+    in property <string> code;
+    // One design unit (the UI is designed at 1080 lines and scaled).
+    in property <length> u: 1px;
+
+    Text {
+        // "cast"
+        text: "\u{e307}";
+        x: (parent.width - self.width) / 2;
+        y: 150 * root.u;
+        color: white;
+        font-family: "Material Icons";
+        font-size: 120 * root.u;
+    }
+
+    Text {
+        text: "Mirroring";
+        x: (parent.width - self.width) / 2;
+        y: 300 * root.u;
+        color: white;
+        font-size: 56 * root.u;
+        font-weight: 600;
+    }
+
+    Text {
+        text: "On your Mac: Control Center → Screen Mirroring → " + root.name;
+        x: (parent.width - self.width) / 2;
+        y: 395 * root.u;
+        color: #ffffffcc;
+        font-size: 32 * root.u;
+    }
+
+    if root.code != "": Rectangle {
+        width: 720 * root.u;
+        height: 300 * root.u;
+        x: (parent.width - self.width) / 2;
+        y: 500 * root.u;
+        border-radius: 28 * root.u;
+        background: #ffffff14;
+        border-color: #ffffff40;
+        border-width: 2 * root.u;
+
+        Text {
+            text: "Enter this code on your Mac";
+            x: (parent.width - self.width) / 2;
+            y: 40 * root.u;
+            color: #ffffffcc;
+            font-size: 30 * root.u;
+        }
+
+        Text {
+            text: root.code;
+            x: (parent.width - self.width) / 2;
+            y: 100 * root.u;
+            color: white;
+            font-size: 140 * root.u;
+            font-weight: 600;
+            letter-spacing: 40 * root.u;
+        }
+    }
+
+    Text {
+        text: "Press Back to stop";
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - 90 * root.u;
+        color: #ffffff80;
+        font-size: 24 * root.u;
+    }
+}
