@@ -32,6 +32,8 @@ pub enum RawEvent {
     /// A remote's OK/Select key (KEY_OK, KEY_SELECT). These have no keysym,
     /// so they never arrive through Wayland.
     SelectKey,
+    /// Back: the gamepad's right face button (B), or a remote's Back/Exit key.
+    Back,
     DeviceGone(DevId),
 }
 
@@ -42,6 +44,7 @@ pub enum Action {
     Up,
     Down,
     Activate,
+    Back,
     Home,
 }
 
@@ -112,6 +115,13 @@ impl Logic {
             RawEvent::South(_) | RawEvent::SelectKey => {
                 if self.navigation_allowed(now) {
                     vec![Action::Activate]
+                } else {
+                    vec![]
+                }
+            }
+            RawEvent::Back => {
+                if self.navigation_allowed(now) {
+                    vec![Action::Back]
                 } else {
                     vec![]
                 }
@@ -339,6 +349,22 @@ mod tests {
             l.on_event(RawEvent::SelectKey, t + ms(1600)),
             vec![Activate]
         );
+    }
+
+    #[test]
+    fn back_acts_when_idle() {
+        let (mut l, t) = setup();
+        assert_eq!(l.on_event(RawEvent::Back, t), vec![Back]);
+    }
+
+    #[test]
+    fn back_is_gated_like_south() {
+        let (mut l, t) = setup();
+        l.set_app_active(true, t);
+        assert_eq!(l.on_event(RawEvent::Back, t), vec![]);
+        l.set_app_active(false, t + ms(1000));
+        assert_eq!(l.on_event(RawEvent::Back, t + ms(1200)), vec![]);
+        assert_eq!(l.on_event(RawEvent::Back, t + ms(1600)), vec![Back]);
     }
 
     #[test]

@@ -1,9 +1,11 @@
 import { TileData, Tile } from "tile.slint";
+import { SettingsRow, SettingsPage } from "settings.slint";
+import "../assets/fonts/MaterialIcons-Regular.ttf";
 import "../assets/fonts/Inter-Light.otf";
 import "../assets/fonts/Inter-Regular.otf";
 import "../assets/fonts/Inter-SemiBold.otf";
 
-export { TileData }
+export { TileData, SettingsRow }
 
 export component MainWindow inherits Window {
     in property <[TileData]> tiles;
@@ -23,6 +25,17 @@ export component MainWindow inherits Window {
     in property <bool> has-background-image;
 
     callback activate(int);
+
+    // Settings screens (drawn from a view model the launcher computes).
+    in property <bool> settings-open;
+    in property <string> settings-title;
+    in property <string> settings-status;
+    in property <[SettingsRow]> settings-rows;
+    in property <int> settings-focused;
+    // 0 up, 1 down, 2 select, 3 back.
+    callback settings-nav(int);
+    callback settings-hover(int);
+    callback settings-click(int);
 
     public function move-focus(delta: int) {
         if root.tiles.length == 0 || root.busy-text != "" || root.input-locked {
@@ -45,14 +58,16 @@ export component MainWindow inherits Window {
     background: #0d1117;
 
     // The home screen fades out while an app is opening.
-    property <float> home-opacity: root.busy-text != "" ? 0.0 : 1.0;
+    property <float> home-opacity: root.busy-text != "" || root.settings-open ? 0.0 : 1.0;
     animate home-opacity { duration: 200ms; }
+    property <float> clock-opacity: root.busy-text != "" ? 0.0 : 1.0;
+    animate clock-opacity { duration: 200ms; }
 
     // One design unit: the layout is designed at 1920×1080.
     property <length> u: self.height / 1080;
-    property <length> tile-w: 400 * self.u;
-    property <length> tile-h: 240 * self.u;
-    property <length> gap: 56 * self.u;
+    property <length> tile-w: 360 * self.u;
+    property <length> tile-h: 216 * self.u;
+    property <length> gap: 48 * self.u;
     property <length> side-margin: 120 * self.u;
     property <length> row-width: root.tiles.length * root.tile-w + max(0, root.tiles.length - 1) * root.gap;
     // Centered when the row fits; otherwise scrolled to keep focus in view.
@@ -67,6 +82,23 @@ export component MainWindow inherits Window {
         key-pressed(event) => {
             if root.error-title != "" {
                 return reject;
+            }
+            if root.settings-open {
+                if root.input-locked {
+                    return accept;
+                }
+                if event.text == Key.UpArrow {
+                    root.settings-nav(0);
+                } else if event.text == Key.DownArrow {
+                    root.settings-nav(1);
+                } else if event.text == Key.Return || event.text == "\n" || event.text == "\u{d}" || event.text == Key.Space {
+                    root.settings-nav(2);
+                } else if event.text == Key.Escape || event.text == Key.Backspace {
+                    root.settings-nav(3);
+                } else {
+                    return reject;
+                }
+                return accept;
             }
             if event.text == Key.LeftArrow {
                 root.move-focus(-1);
@@ -123,7 +155,7 @@ export component MainWindow inherits Window {
         color: white;
         font-size: 56 * root.u;
         font-weight: 300;
-        opacity: root.home-opacity;
+        opacity: root.clock-opacity;
     }
 
     Text {
@@ -132,7 +164,7 @@ export component MainWindow inherits Window {
         y: time.y + time.height;
         color: #ffffffb3;
         font-size: 24 * root.u;
-        opacity: root.home-opacity;
+        opacity: root.clock-opacity;
     }
 
     // App tiles.
@@ -150,16 +182,38 @@ export component MainWindow inherits Window {
             u: root.u;
             data: tile;
             focused: i == root.focused;
+            // Hidden (opacity 0) while Settings or "Opening…" is up, but
+            // still under the pointer: ignore it then.
             hovered => {
-                if !root.input-locked && root.busy-text == "" {
+                if !root.input-locked && root.busy-text == "" && !root.settings-open {
                     root.focused = i;
                 }
             }
             clicked => {
-                if !root.input-locked && root.busy-text == "" {
+                if !root.input-locked && root.busy-text == "" && !root.settings-open {
                     root.focused = i;
                     root.activate-focused();
                 }
+            }
+        }
+    }
+
+    if root.settings-open: SettingsPage {
+        width: parent.width;
+        height: parent.height;
+        u: root.u;
+        title: root.settings-title;
+        status: root.settings-status;
+        rows: root.settings-rows;
+        focused: root.settings-focused;
+        row-hovered(i) => {
+            if !root.input-locked {
+                root.settings-hover(i);
+            }
+        }
+        row-clicked(i) => {
+            if !root.input-locked {
+                root.settings-click(i);
             }
         }
     }

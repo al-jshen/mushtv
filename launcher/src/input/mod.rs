@@ -44,11 +44,18 @@ pub(crate) struct DevKind {
     pub home_source: bool,
     /// Has a remote-style OK/Select key.
     pub select_source: bool,
+    /// Has a remote-style Back/Exit key.
+    pub back_source: bool,
 }
 
 /// Remote OK/Select keys. They have no keysym, so Wayland apps (including
 /// the launcher's UI) never see them; the launcher reads them here instead.
 const SELECT_KEYS: [KeyCode; 2] = [KeyCode::KEY_OK, KeyCode::KEY_SELECT];
+
+/// Remote Back/Exit keys. Like OK/Select, apps can't rely on these through
+/// Wayland, so the launcher reads them here. (Escape and Backspace arrive
+/// through Wayland as normal keys.)
+const BACK_KEYS: [KeyCode; 2] = [KeyCode::KEY_BACK, KeyCode::KEY_EXIT];
 
 /// Starts the input threads. `on_action` runs on the input thread.
 pub fn spawn(
@@ -196,6 +203,7 @@ pub(crate) fn classify(device: &Device, home_keys: &[KeyCode]) -> DevKind {
         gamepad: has(KeyCode::BTN_SOUTH),
         home_source: home_keys.iter().any(|&k| has(k)),
         select_source: SELECT_KEYS.iter().any(|&k| has(k)),
+        back_source: BACK_KEYS.iter().any(|&k| has(k)),
     }
 }
 
@@ -235,6 +243,9 @@ fn read_device(
                     if kind.select_source && down && SELECT_KEYS.contains(&code) {
                         send(RawEvent::SelectKey);
                     }
+                    if kind.back_source && down && BACK_KEYS.contains(&code) {
+                        send(RawEvent::Back);
+                    }
                     if !kind.gamepad {
                         continue;
                     }
@@ -247,6 +258,7 @@ fn read_device(
                         KeyCode::BTN_MODE if down => send(RawEvent::GuideDown(id)),
                         KeyCode::BTN_MODE => send(RawEvent::GuideUp(id)),
                         KeyCode::BTN_SOUTH if down => send(RawEvent::South(id)),
+                        KeyCode::BTN_EAST if down => send(RawEvent::Back),
                         KeyCode::BTN_DPAD_LEFT => send(dir(Axis::X, -1)),
                         KeyCode::BTN_DPAD_RIGHT => send(dir(Axis::X, 1)),
                         KeyCode::BTN_DPAD_UP => send(dir(Axis::Y, -1)),

@@ -1,6 +1,10 @@
+mod audio;
+mod bluetooth;
 mod config;
 mod input;
 mod runner;
+mod settings;
+mod settings_ui;
 
 slint::include_modules!();
 
@@ -186,9 +190,18 @@ fn run(config_path: &Path) -> Result<()> {
         }
     };
 
-    ui.set_tiles(ModelRc::from(Rc::new(VecModel::from(tile_models(
-        &config.tiles,
-    )))));
+    let mut tile_data = tile_models(&config.tiles);
+    if ui.get_error_title().is_empty() {
+        tile_data.push(TileData {
+            name: "Settings".into(),
+            icon: slint::Image::default(),
+            has_icon: false,
+            color: slint::Color::from_rgb_u8(0x2b, 0x31, 0x3c),
+            glyph: settings_ui::SETTINGS_GLYPH.into(),
+        });
+    }
+    ui.set_tiles(ModelRc::from(Rc::new(VecModel::from(tile_data))));
+    settings_ui::init(&ui);
     if let Some(bg) = background_path(Path::new(ASSETS_DIR)) {
         match slint::Image::load_from_path(&bg) {
             Ok(image) => {
@@ -256,6 +269,13 @@ fn run(config_path: &Path) -> Result<()> {
             let (Some(ui), Ok(index)) = (weak.upgrade(), usize::try_from(index)) else {
                 return;
             };
+            if settings_ui::is_open() {
+                return; // a hidden tile under the pointer
+            }
+            if index == tiles.len() {
+                settings_ui::open();
+                return;
+            }
             let Some(tile) = tiles.get(index) else { return };
             if runner.launch(index, tile) {
                 tracing::info!("opening {} ({})", tile.name, tile.command.join(" "));
@@ -314,6 +334,7 @@ fn tile_models(tiles: &[Tile]) -> Vec<TileData> {
                 has_icon: icon.is_some(),
                 icon: icon.unwrap_or_default(),
                 color: slint::Color::from_rgb_u8(r, g, b),
+                glyph: SharedString::new(),
             }
         })
         .collect()
@@ -349,10 +370,22 @@ fn on_run_event(ui: &MainWindow, tiles: &[Tile], input: Option<&InputHandle>, ev
 }
 
 fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
+    if settings_ui::is_open() {
+        let nav = match action {
+            Action::Up => settings::Nav::Up,
+            Action::Down => settings::Nav::Down,
+            Action::Activate => settings::Nav::Select,
+            Action::Back => settings::Nav::Back,
+            Action::Home => settings::Nav::Home,
+            Action::Left | Action::Right => return,
+        };
+        settings_ui::nav_to(nav);
+        return;
+    }
     match action {
         Action::Left => ui.invoke_move_focus(-1),
         Action::Right => ui.invoke_move_focus(1),
-        Action::Up | Action::Down => {}
+        Action::Up | Action::Down | Action::Back => {}
         Action::Activate => ui.invoke_activate_focused(),
         Action::Home => {
             if runner.is_active() {

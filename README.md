@@ -36,7 +36,23 @@ The first deploy sets up autologin. Run it with `--restart`, or reboot, to switc
 | tv's login script (from `deploy/bash_profile`) | `/home/tv/.bash_profile` |
 | HDMI audio rule (from `deploy/wireplumber-hdmi.conf`) | `/home/tv/.config/wireplumber/wireplumber.conf.d/51-mushtv-hdmi.conf` |
 
-The onboard sound card exposes analog and HDMI as separate profiles, and PipeWire picks analog (the headphone jack) by default. The audio rule makes the TV session prefer HDMI. When it changes, deploy restarts tv's WirePlumber, so audio moves over straight away.
+The onboard sound card exposes analog and HDMI as separate profiles, and PipeWire picks analog (the headphone jack) by default. The audio rule makes the TV session prefer HDMI. It also ranks Bluetooth outputs below HDMI, so a speaker never takes over until you choose it. When the rule changes, deploy restarts tv's WirePlumber, so audio moves over straight away.
+
+## Settings
+
+The gear tile at the end of the row opens Settings (Up/Down, OK, Back; Home returns to the tiles):
+
+- **Audio output:** choose the TV or a paired Bluetooth speaker or headphones. The choice is remembered.
+  - A chosen speaker gets the audio whenever it's connected, and audio falls back to the TV when it isn't.
+  - Picking a speaker that's off connects it first.
+- **Bluetooth:** paired devices (connect, disconnect, forget) and **Add device**.
+  - Add device scans while it's open. Pick a speaker, controller or keyboard in pairing mode.
+  - Speakers and controllers pair without a code. Keyboards show a code to type.
+  - Nearby devices may include neighbours' gadgets; speakers, controllers, keyboards and mice are listed first.
+
+Needs `bluez` and `libspa-0.2-bluetooth` (installed). Bluetooth logs go to `sudo journalctl -b -t mushtv-launcher`.
+
+**Wi-Fi and Bluetooth share one chip** (Realtek RTL8821CE). On 2.4 GHz Wi-Fi, Bluetooth audio can stutter while the network is busy (YouTube, Moonlight). Use 5 GHz Wi-Fi or Ethernet if that happens.
 
 `launcher/launcher.toml` in the repo is the source of truth. If the installed copy was edited by hand, deploy shows the diff and keeps a `.bak` before replacing it.
 
@@ -86,3 +102,7 @@ These can't be tested without the TV connected:
 - [ ] The launcher looks right and animates smoothly at the TV's real resolution (4K?).
 - [ ] Crash recovery: `sudo pkill -f mushtv-launcher` brings the launcher back within about 5 s.
 - [ ] Docker and SSH stay responsive while the TV is in use.
+- [ ] Settings → Bluetooth → Add device: pair a speaker and a controller; both show as paired and connected.
+- [ ] Settings → Audio output: switch to the speaker and back to TV while something plays; audio moves without restarting the app.
+- [ ] With the speaker chosen: turn it off (audio falls back to the TV), then on (audio returns to the speaker).
+- [ ] With the TV chosen: turn the speaker on; audio stays on the TV.

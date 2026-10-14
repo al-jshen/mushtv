@@ -1,0 +1,128 @@
+export struct SettingsRow {
+    // A Material Icons glyph.
+    icon: string,
+    label: string,
+    detail: string,
+    checked: bool,
+}
+
+// One settings page: a title, an optional status line, and a centered
+// column of large rows. The focused row gets the same glow as a focused tile.
+export component SettingsPage inherits Rectangle {
+    in property <string> title;
+    in property <string> status;
+    in property <[SettingsRow]> rows;
+    in property <int> focused;
+    // One design unit (the UI is designed at 1080 lines and scaled).
+    in property <length> u: 1px;
+    callback row-hovered(int);
+    callback row-clicked(int);
+
+    property <length> row-h: 96 * root.u;
+    property <length> gap: 16 * root.u;
+    property <length> list-w: 1000 * root.u;
+    property <length> list-top: 300 * root.u;
+    property <length> list-bottom: 120 * root.u;
+    property <length> visible-h: root.height - root.list-top - root.list-bottom;
+    property <length> total-h: root.rows.length * (root.row-h + root.gap);
+    // Keep the focused row near the middle of the visible area.
+    property <length> scroll: clamp(
+        root.focused * (root.row-h + root.gap) - (root.visible-h - root.row-h) / 2,
+        0, max(0, root.total-h - root.visible-h));
+
+    Text {
+        text: root.title;
+        x: (parent.width - self.width) / 2;
+        y: 130 * root.u;
+        color: white;
+        font-size: 56 * root.u;
+        font-weight: 600;
+    }
+
+    Text {
+        text: root.status;
+        x: (parent.width - self.width) / 2;
+        y: 215 * root.u;
+        color: #ffffffb3;
+        font-size: 28 * root.u;
+    }
+
+    Rectangle {
+        x: (parent.width - root.list-w) / 2 - 40 * root.u;
+        y: root.list-top - 20 * root.u;
+        width: root.list-w + 80 * root.u;
+        height: root.visible-h + 40 * root.u;
+        clip: true;
+
+        list := Rectangle {
+            x: 40 * root.u;
+            y: 20 * root.u - root.scroll;
+            width: root.list-w;
+            height: root.total-h;
+            animate y { duration: 200ms; easing: ease-out; }
+
+            for row[i] in root.rows: Rectangle {
+                property <bool> is-focused: i == root.focused;
+                x: 0;
+                y: i * (root.row-h + root.gap);
+                width: root.list-w;
+                height: root.row-h;
+                border-radius: 22 * root.u;
+                background: self.is-focused ? #ffffff2e : #ffffff12;
+                border-color: #ffffffe6;
+                border-width: self.is-focused ? 4 * root.u : 0;
+                drop-shadow-color: #ffffff40;
+                drop-shadow-blur: self.is-focused ? 36 * root.u : 0;
+                animate background, drop-shadow-blur { duration: 150ms; }
+
+                Text {
+                    text: row.icon;
+                    x: 32 * root.u;
+                    y: (parent.height - self.height) / 2;
+                    color: white;
+                    font-family: "Material Icons";
+                    font-size: 44 * root.u;
+                }
+
+                Text {
+                    text: row.label;
+                    x: 104 * root.u;
+                    y: (parent.height - self.height) / 2;
+                    color: white;
+                    font-size: 32 * root.u;
+                }
+
+                Text {
+                    text: row.detail;
+                    x: parent.width - self.width - (row.checked ? 100 : 36) * root.u;
+                    y: (parent.height - self.height) / 2;
+                    color: #ffffffa6;
+                    font-size: 26 * root.u;
+                }
+
+                if row.checked: Text {
+                    // "check"
+                    text: "\u{e5ca}";
+                    x: parent.width - self.width - 32 * root.u;
+                    y: (parent.height - self.height) / 2;
+                    color: #7ee787;
+                    font-family: "Material Icons";
+                    font-size: 44 * root.u;
+                }
+
+                TouchArea {
+                    width: parent.width;
+                    height: parent.height;
+                    changed has-hover => {
+                        if self.has-hover {
+                            root.row-hovered(i);
+                        }
+                    }
+                    clicked => {
+                        root.row-clicked(i);
+                    }
+                }
+            }
+        }
+    }
+}
