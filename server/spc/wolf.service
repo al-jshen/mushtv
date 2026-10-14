@@ -1,0 +1,19 @@
+[Unit]
+Description=Wolf game streaming server (Moonlight)
+Requires=docker.service
+After=docker.service network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/wolf
+ExecStartPre=/opt/wolf/wolf-prestart
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=10
+# Rebuilding the driver volume after a driver update downloads and unpacks
+# NVIDIA's installer.
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

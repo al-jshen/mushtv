@@ -1,0 +1,53 @@
+#!/bin/bash
+# Runs as root before Wolf starts (ExecStartPre in wolf.service):
+#  1. firewall: Wolf's ports answer only over Tailscale;
+#  2. tells Wolf which render node is the NVIDIA GPU;
+#  3. rebuilds the NVIDIA driver volume when the loaded driver has changed.
+set -euo pipefail
+
+# 1. Wolf listens on every interface, and spc's Wi-Fi is shared with the
+# building. Loopback stays open for pairing from spc itself.
+nft -f - <<'EOF'
+table inet wolf
+delete table inet wolf
+table inet wolf {
+	chain input {
+		type filter hook input priority filter; policy accept;
+		iifname { "lo", "tailscale0" } accept
+		tcp dport { 47984, 47989, 48010 } drop
+		udp dport { 47999, 48100, 48200 } drop
+	}
+}
+EOF
+
+# 2. The render node numbers follow driver probe order, so look it up.
+node=
+for r in /sys/class/drm/renderD*; do
+	if [ "$(basename "$(readlink -f "$r/device/driver")")" = nvidia ]; then
+		node=/dev/dri/$(basename "$r")
+	fi
+done
+if [ -z "$node" ]; then
+	echo "wolf-prestart: no NVIDIA render node" >&2
+	exit 1
+fi
+install -d -m 755 /run/wolf /run/wolf/sockets
+echo "WOLF_RENDER_NODE=$node" >/run/wolf/render.env
+
+# 3. Wolf's containers get the NVIDIA userspace driver from a volume, which
+# must match the kernel module. Ubuntu updates the driver on its own, so
+# compare the module's version with the one the volume was built for.
+want=$(cat /sys/module/nvidia/version)
+have=$(docker volume inspect -f '{{ index .Labels "nvidia-version" }}' nvidia-driver-vol 2>/dev/null || true)
+if [ "$want" != "$have" ]; then
+	echo "wolf-prestart: building the NVIDIA driver volume for $want (was: ${have:-none})"
+	docker ps -aq --filter volume=nvidia-driver-vol | xargs -r docker rm -f
+	docker volume rm -f nvidia-driver-vol >/dev/null
+	docker build -t "gow/nvidia-driver:$want" --build-arg "NV_VERSION=$want" - </opt/wolf/nvidia-driver.Dockerfile
+	docker volume create --label "nvidia-version=$want" nvidia-driver-vol >/dev/null
+	# Mounting the empty volume on a new container fills it from the image.
+	docker rm "$(docker create --mount source=nvidia-driver-vol,destination=/usr/nvidia "gow/nvidia-driver:$want" sh)" >/dev/null
+	if [ -n "$have" ]; then
+		docker rmi "gow/nvidia-driver:$have" >/dev/null 2>&1 || true
+	fi
+fi

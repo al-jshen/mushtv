@@ -1,0 +1,46 @@
+# Wolf, the Moonlight game streaming server on spc: one virtual desktop per
+# client, so streaming never touches the desktop at spc's own monitor.
+# Installed to /opt/wolf and run by wolf.service (see README.md).
+name: wolf
+services:
+  wolf:
+    image: ghcr.io/games-on-whales/wolf:stable
+    container_name: wolf
+    network_mode: host
+    # wolf.service supervises Wolf. A Docker restart policy would start it at
+    # boot before wolf-prestart has set up the firewall and driver volume.
+    restart: "no"
+    env_file:
+      # WOLF_RENDER_NODE, the NVIDIA GPU's node (renderD128 is the AMD iGPU,
+      # and the numbering follows driver probe order); from wolf-prestart.
+      - /run/wolf/render.env
+    environment:
+      NVIDIA_DRIVER_VOLUME_NAME: nvidia-driver-vol
+      # Apps run as jshen, not as UID 1000 (sandy).
+      WOLF_DEFAULT_RUN_UID: "1001"
+      WOLF_DEFAULT_RUN_GID: "1001"
+    volumes:
+      - /etc/wolf:/etc/wolf:rw
+      # Wolf's runtime dir (its API and PulseAudio sockets), which Wolf mounts
+      # into app containers by host path, so it must exist on the host.
+      - /run/wolf/sockets:/tmp/sockets:rw
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - /dev:/dev:rw
+      - /run/udev:/run/udev:rw
+      - nvidia-driver-vol:/usr/nvidia:rw
+    # Wolf's NVIDIA list, minus /dev/nvidia-caps/*, which spc doesn't have.
+    devices:
+      - /dev/dri
+      - /dev/uinput
+      - /dev/uhid
+      - /dev/nvidia0
+      - /dev/nvidiactl
+      - /dev/nvidia-modeset
+      - /dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools
+    device_cgroup_rules:
+      - 'c 13:* rmw'
+
+volumes:
+  nvidia-driver-vol:
+    external: true
