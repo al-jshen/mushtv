@@ -184,12 +184,7 @@ impl Ctl {
                 Effect::SetMirroringMode(mode) => {
                     self.snap.mirroring_mode = mode;
                     let saved = match &self.prefs_path {
-                        Some(path) => prefs::save(
-                            path,
-                            &Prefs {
-                                mirroring_mode: mode,
-                            },
-                        ),
+                        Some(path) => prefs::update(path, |p| p.mirroring_mode = mode),
                         None => Err(anyhow::anyhow!("no home directory to save settings in")),
                     };
                     match saved {

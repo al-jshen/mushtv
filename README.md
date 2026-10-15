@@ -72,11 +72,16 @@ When the receiver starts, Home Assistant or Music Assistant on this box may brie
 
 ## Games (Steam)
 
-The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC, spc, with Moonlight. It runs `moonlight stream spc Steam` at 1080p and 60 fps, over Tailscale. On spc, [Wolf](server/spc/README.md) gives the TV its own invisible desktop, so someone can keep using spc's own screen at the same time.
+The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC, spc, with Moonlight, at 1080p and 60 fps over Tailscale. On spc, [Wolf](server/spc/README.md) gives the TV its own invisible desktop, so someone can keep using spc's own screen at the same time.
 
-- **Home** (or F12) disconnects but leaves the game running on spc. Opening the tile again picks up where you left off.
+- **Opening the tile asks which GPU:**
+  - **Graphics card (RTX 4060)** streams from the server `spc`: full power, but not while someone is playing a game at spc's desk (the card runs out of memory and Moonlight says "No video received from host").
+  - **Integrated graphics card** streams from `spc-igpu`: light games (Overcooked 2 and the like) without touching the RTX 4060.
+  - Up/Down and OK choose; Back or Home cancels. It starts on the one used last (saved in `~/.local/state/mushtv/settings.toml`, tv's home).
+- **Both share one Steam:** one login, games installed once. Only one runs at a time, so picking one GPU ends a session left open on the other (unsaved progress there is lost).
+- **Home** (or F12) disconnects but leaves the game running on spc. Opening the tile again with the same GPU picks up where you left off. A session left paused for 30 minutes is ended on spc by itself.
 - **To end a session,** choose Power → Exit Steam in Steam. The stream closes and the TV returns to the tiles.
-- **Controllers, keyboard and mouse** are passed through to Steam. Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard.
+- **Controllers, keyboard and mouse** are passed through to Steam; games see controllers as Xbox controllers (see `server/spc/README.md` for why). Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard.
 - **The Moonlight tile** opens Moonlight's own menus, which are useful for pairing or other hosts. After a stream ends there, its window can stay black; press Home.
 
 Setup, the GPU choice and limits are in [`server/spc/README.md`](server/spc/README.md). Moonlight's log is `sudo journalctl -t mushtv-steam`.
@@ -135,7 +140,9 @@ These can't be tested without the TV connected:
 - [ ] Mirroring again from the same Mac: no code asked.
 - [ ] Stopping mirroring on the Mac returns the TV to the tiles; so does Home during mirroring, and Back on the waiting screen.
 - [ ] Settings → Mirroring → Smooth playback: the next session plays video more smoothly, with more lag; Low lag returns to responsive.
-- [ ] Steam tile: Steam's TV interface appears; keyboard, mouse and a controller all work in it.
+- [ ] Steam tile: the GPU picker appears and starts on the GPU used last; Back returns to the tiles.
+- [ ] Steam tile: Steam's TV interface appears on both GPUs; keyboard, mouse and a controller all work in it.
+- [ ] Steam tile: switching GPUs ends the session on the other one, and Steam starts (with the same login) within a minute.
 - [ ] Steam tile: Home (and F12) returns to the tiles; opening the tile again resumes the same game.
 - [ ] Steam tile: Power → Exit Steam returns the TV to the tiles.
 

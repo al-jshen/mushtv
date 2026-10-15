@@ -1,5 +1,7 @@
 mod audio;
 mod bluetooth;
+mod choice;
+mod choice_ui;
 mod config;
 mod input;
 mod mirroring;
@@ -226,7 +228,7 @@ fn run(config_path: &Path) -> Result<()> {
     ui.set_tiles(ModelRc::from(Rc::new(VecModel::from(tile_data))));
     let prefs_path = prefs::default_path();
     let prefs = prefs_path.as_deref().map(prefs::load).unwrap_or_default();
-    settings_ui::init(&ui, prefs_path, prefs);
+    settings_ui::init(&ui, prefs_path.clone(), prefs);
     if let Some(bg) = background_path(Path::new(ASSETS_DIR)) {
         match slint::Image::load_from_path(&bg) {
             Ok(image) => {
@@ -291,6 +293,13 @@ fn run(config_path: &Path) -> Result<()> {
         Arc::clone(&input_slot),
         config.mirroring_name.clone(),
     );
+    choice_ui::init(
+        &ui,
+        Arc::clone(&runner),
+        Arc::clone(&input_slot),
+        Arc::clone(&tiles),
+        prefs_path,
+    );
 
     ui.on_activate({
         let weak = ui.as_weak();
@@ -300,7 +309,7 @@ fn run(config_path: &Path) -> Result<()> {
             let (Some(ui), Ok(index)) = (weak.upgrade(), usize::try_from(index)) else {
                 return;
             };
-            if settings_ui::is_open() || mirroring_ui::is_open() {
+            if settings_ui::is_open() || mirroring_ui::is_open() || choice_ui::is_open() {
                 return; // a hidden tile under the pointer
             }
             // Built-in tiles come after the configured apps.
@@ -313,10 +322,13 @@ fn run(config_path: &Path) -> Result<()> {
                 return;
             }
             let Some(tile) = tiles.get(index) else { return };
+            if !tile.choices.is_empty() {
+                choice_ui::open(index);
+                return;
+            }
             if runner.launch(index, tile) {
                 tracing::info!("opening {} ({})", tile.name, tile.command.join(" "));
-                ui.set_busy_text(format!("Opening {}…", tile.name).into());
-                input.set_app_active(true);
+                opening(&ui, Some(&input), &tile.name);
             }
         }
     });
@@ -340,6 +352,15 @@ fn run(config_path: &Path) -> Result<()> {
 
     let result = ui.run().map_err(anyhow::Error::from);
     finish(result, &runner)
+}
+
+/// After an app was started: "Opening …" until it's up, and only Home gets
+/// through while it runs.
+fn opening(ui: &MainWindow, input: Option<&InputHandle>, name: &str) {
+    ui.set_busy_text(format!("Opening {name}…").into());
+    if let Some(input) = input {
+        input.set_app_active(true);
+    }
 }
 
 /// Ends a run: the app is stopped whether the UI loop ended cleanly or with an
@@ -424,6 +445,17 @@ fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
             }
             _ => {}
         }
+        return;
+    }
+    if choice_ui::is_open() {
+        let nav = match action {
+            Action::Up => choice_ui::ChoiceNav::Up,
+            Action::Down => choice_ui::ChoiceNav::Down,
+            Action::Activate => choice_ui::ChoiceNav::Select,
+            Action::Back | Action::Home => choice_ui::ChoiceNav::Back,
+            Action::Left | Action::Right => return,
+        };
+        choice_ui::nav(nav);
         return;
     }
     if settings_ui::is_open() {
@@ -578,6 +610,7 @@ mod tests {
             id: "t".into(),
             name: "T".into(),
             command: args(&["sleep", "30"]),
+            choices: Vec::new(),
             stop_command: None,
             icon: None,
             color: None,

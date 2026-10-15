@@ -26,10 +26,21 @@ pub struct Config {
 pub struct Tile {
     pub id: String,
     pub name: String,
+    /// Empty when the tile has choices.
     pub command: Vec<String>,
+    /// Ways to start the tile, offered when it's opened (two or more), or
+    /// empty for a tile that just runs `command`.
+    pub choices: Vec<Choice>,
     pub stop_command: Option<Vec<String>>,
     pub icon: Option<PathBuf>,
     pub color: Option<(u8, u8, u8)>,
+}
+
+/// One way to start a tile that offers a choice (e.g. which GPU).
+#[derive(Debug, Clone)]
+pub struct Choice {
+    pub name: String,
+    pub command: Vec<String>,
 }
 
 /// Where tile icons are looked up.
@@ -102,9 +113,41 @@ pub fn parse(text: &str, icon_roots: &IconRoots) -> Result<Config> {
         if tiles.iter().any(|other| other.id == t.id) {
             bail!("{what}: duplicate id {:?}", t.id);
         }
-        if t.command.is_empty() {
-            bail!("{what}: command must not be empty");
-        }
+        let (command, choices) = match (t.command, t.choices.len()) {
+            (Some(_), n) if n > 0 => {
+                bail!("{what}: use either command or [[tile.choice]], not both")
+            }
+            (Some(command), _) => {
+                if command.is_empty() {
+                    bail!("{what}: command must not be empty");
+                }
+                (command, Vec::new())
+            }
+            (None, 0) => bail!("{what}: needs a command or two or more [[tile.choice]]"),
+            (None, 1) => {
+                bail!("{what}: needs two or more [[tile.choice]] (with one, use command)")
+            }
+            (None, _) => {
+                let mut choices: Vec<Choice> = Vec::new();
+                for (n, c) in t.choices.into_iter().enumerate() {
+                    let name = c.name.trim().to_string();
+                    if name.is_empty() {
+                        bail!("{what}: choice {} needs a name", n + 1);
+                    }
+                    if choices.iter().any(|other| other.name == name) {
+                        bail!("{what}: duplicate choice {name:?}");
+                    }
+                    if c.command.is_empty() {
+                        bail!("{what}: choice {name:?}: command must not be empty");
+                    }
+                    choices.push(Choice {
+                        name,
+                        command: c.command,
+                    });
+                }
+                (Vec::new(), choices)
+            }
+        };
         if t.stop_command.as_ref().is_some_and(|c| c.is_empty()) {
             bail!("{what}: stop_command must not be empty (leave it out instead)");
         }
@@ -114,11 +157,13 @@ pub fn parse(text: &str, icon_roots: &IconRoots) -> Result<Config> {
             .map(parse_color)
             .transpose()
             .with_context(|| format!("{what}: color"))?;
-        let icon = resolve_icon(t.icon.as_deref(), &t.command, icon_roots);
+        let icon_command = choices.first().map_or(&command, |c| &c.command);
+        let icon = resolve_icon(t.icon.as_deref(), icon_command, icon_roots);
         tiles.push(Tile {
             id: t.id,
             name: t.name,
-            command: t.command,
+            command,
+            choices,
             stop_command: t.stop_command,
             icon,
             color,
@@ -238,10 +283,19 @@ struct RawLauncher {
 struct RawTile {
     id: String,
     name: String,
-    command: Vec<String>,
+    command: Option<Vec<String>>,
+    #[serde(default, rename = "choice")]
+    choices: Vec<RawChoice>,
     stop_command: Option<Vec<String>>,
     icon: Option<String>,
     color: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawChoice {
+    name: String,
+    command: Vec<String>,
 }
 
 #[cfg(test)]
@@ -556,5 +610,87 @@ mod tests {
     fn repo_config_is_valid() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("launcher.toml");
         load(&path, &no_icons()).unwrap();
+    }
+
+    const CHOICES: &str = r#"
+        [[tile]]
+        id = "steam"
+        name = "Steam"
+        [[tile.choice]]
+        name = "Graphics card (RTX 4060)"
+        command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc", "Steam"]
+        [[tile.choice]]
+        name = "Integrated graphics card"
+        command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc-igpu", "Steam"]
+    "#;
+
+    #[test]
+    fn tile_choices_parse_in_order() {
+        let c = parse(CHOICES, &no_icons()).unwrap();
+        let t = &c.tiles[0];
+        assert!(t.command.is_empty());
+        let names: Vec<_> = t.choices.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Graphics card (RTX 4060)", "Integrated graphics card"]
+        );
+        assert_eq!(t.choices[1].command[4], "spc-igpu");
+    }
+
+    #[test]
+    fn plain_tiles_have_no_choices() {
+        assert!(
+            parse(MINIMAL, &no_icons()).unwrap().tiles[0]
+                .choices
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn rejects_command_and_choices_together() {
+        let text = CHOICES.replace("name = \"Steam\"", "name = \"Steam\"\ncommand = [\"x\"]");
+        let e = err_of(&text);
+        assert!(e.contains("either command or [[tile.choice]]"), "{e}");
+    }
+
+    #[test]
+    fn rejects_a_tile_without_command_or_choices() {
+        let e = err_of("[[tile]]\nid = \"a\"\nname = \"A\"\n");
+        assert!(e.contains("needs a command"), "{e}");
+    }
+
+    #[test]
+    fn rejects_a_single_choice() {
+        let e = err_of(
+            "[[tile]]\nid = \"a\"\nname = \"A\"\n[[tile.choice]]\nname = \"One\"\ncommand = [\"x\"]\n",
+        );
+        assert!(e.contains("two or more"), "{e}");
+    }
+
+    #[test]
+    fn rejects_bad_choices() {
+        let blank = CHOICES.replace("name = \"Integrated graphics card\"", "name = \"  \"");
+        let e = err_of(&blank);
+        assert!(e.contains("needs a name"), "{e}");
+        let dup = CHOICES.replace("Integrated graphics card", "Graphics card (RTX 4060)");
+        let e = err_of(&dup);
+        assert!(e.contains("duplicate choice"), "{e}");
+        let empty = CHOICES.replace(
+            r#"command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc-igpu", "Steam"]"#,
+            "command = []",
+        );
+        let e = err_of(&empty);
+        assert!(e.contains("command must not be empty"), "{e}");
+    }
+
+    #[test]
+    fn a_tile_with_choices_takes_its_icon_from_the_first_choice() {
+        let d = tempfile::tempdir().unwrap();
+        let svg = d
+            .path()
+            .join("hicolor/scalable/apps/com.moonlight_stream.Moonlight.svg");
+        touch(&svg);
+        let c = parse(CHOICES, &roots(d.path())).unwrap();
+        assert_eq!(c.tiles[0].icon.as_deref(), Some(svg.as_path()));
     }
 }

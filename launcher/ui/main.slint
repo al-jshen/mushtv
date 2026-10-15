@@ -44,6 +44,16 @@ export component MainWindow inherits Window {
     callback settings-hover(int);
     callback settings-click(int);
 
+    // The picker for a tile with choices (drawn with the Settings page).
+    in property <bool> choice-open;
+    in property <string> choice-title;
+    in property <[SettingsRow]> choice-rows;
+    in property <int> choice-focused;
+    // 0 up, 1 down, 2 select, 3 back.
+    callback choice-nav(int);
+    callback choice-hover(int);
+    callback choice-click(int);
+
     // Left/Right: within the focused tile's row.
     public function move-focus(delta: int) {
         if root.tiles.length == 0 || root.busy-text != "" || root.input-locked {
@@ -77,7 +87,7 @@ export component MainWindow inherits Window {
     background: #0d1117;
 
     // The home screen fades out while an app is opening.
-    property <float> home-opacity: root.busy-text != "" || root.settings-open || root.mirroring-open ? 0.0 : 1.0;
+    property <float> home-opacity: root.busy-text != "" || root.settings-open || root.mirroring-open || root.choice-open ? 0.0 : 1.0;
     animate home-opacity { duration: 200ms; }
     property <float> clock-opacity: root.busy-text != "" ? 0.0 : 1.0;
     animate clock-opacity { duration: 200ms; }
@@ -121,6 +131,23 @@ export component MainWindow inherits Window {
             if root.mirroring-open {
                 if !root.input-locked && (event.text == Key.Escape || event.text == Key.Backspace) {
                     root.mirroring-back();
+                }
+                return accept;
+            }
+            if root.choice-open {
+                if root.input-locked {
+                    return accept;
+                }
+                if event.text == Key.UpArrow {
+                    root.choice-nav(0);
+                } else if event.text == Key.DownArrow {
+                    root.choice-nav(1);
+                } else if event.text == Key.Return || event.text == "\n" || event.text == "\u{d}" || event.text == Key.Space {
+                    root.choice-nav(2);
+                } else if event.text == Key.Escape || event.text == Key.Backspace {
+                    root.choice-nav(3);
+                } else {
+                    return reject;
                 }
                 return accept;
             }
@@ -242,16 +269,36 @@ export component MainWindow inherits Window {
                 // Hidden (opacity 0) while Settings or "Opening…" is up, but
                 // still under the pointer: ignore it then.
                 hovered => {
-                    if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
+                    if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open && !root.choice-open {
                         root.focused = i;
                     }
                 }
                 clicked => {
-                    if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open {
+                    if !root.input-locked && root.busy-text == "" && !root.settings-open && !root.mirroring-open && !root.choice-open {
                         root.focused = i;
                         root.activate-focused();
                     }
                 }
+            }
+        }
+    }
+
+    if root.choice-open: SettingsPage {
+        width: parent.width;
+        height: parent.height;
+        u: root.u;
+        title: root.choice-title;
+        status: "";
+        rows: root.choice-rows;
+        focused: root.choice-focused;
+        row-hovered(i) => {
+            if !root.input-locked {
+                root.choice-hover(i);
+            }
+        }
+        row-clicked(i) => {
+            if !root.input-locked {
+                root.choice-click(i);
             }
         }
     }

@@ -94,9 +94,26 @@ impl Runner {
         )
     }
 
+    /// Starts one of a tile's choices; the tile's id, stop command and events
+    /// are as for [`Runner::launch`]. False if an app is already active or
+    /// there is no such choice.
+    pub fn launch_choice(&self, tile_index: usize, tile: &Tile, choice: usize) -> bool {
+        let Some(choice) = tile.choices.get(choice) else {
+            return false;
+        };
+        self.start(
+            App::Tile(tile_index),
+            &tile.id,
+            &with_die_with_parent(&choice.command),
+            tile.stop_command.clone(),
+            None,
+        )
+    }
+
     /// Starts `command` like [`Runner::launch`], but pipes its stdout and
     /// stderr: each line goes to `on_line` (on a reader thread) and to the
-    /// journal. Returns false if an app is already active.
+    /// journal. The last lines may arrive just after the app's `Exited`
+    /// event. Returns false if an app is already active.
     pub fn launch_capturing(
         &self,
         app: App,
@@ -360,6 +377,7 @@ fn group_alive(pgid: Pid) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Choice;
     use std::sync::Mutex;
     use std::sync::mpsc::{self, Receiver};
     use std::time::Instant;
@@ -371,6 +389,7 @@ mod tests {
             name: "Test".into(),
             command: v(command),
             stop_command: stop.map(v),
+            choices: Vec::new(),
             icon: None,
             color: None,
         }
@@ -420,6 +439,43 @@ mod tests {
                 quick: true
             }
         );
+    }
+
+    fn with_choices(commands: &[&[&str]]) -> Tile {
+        let mut t = tile(&[], None);
+        t.choices = commands
+            .iter()
+            .enumerate()
+            .map(|(i, c)| Choice {
+                name: format!("choice {i}"),
+                command: c.iter().map(|s| s.to_string()).collect(),
+            })
+            .collect();
+        t
+    }
+
+    #[test]
+    fn launch_choice_runs_the_chosen_command() {
+        let (r, rx) = runner();
+        let t = with_choices(&[&["sh", "-c", "exit 0"], &["sh", "-c", "exit 3"]]);
+        assert!(r.launch_choice(4, &t, 1));
+        assert_eq!(
+            next(&rx, Duration::from_secs(5)),
+            RunEvent::Exited {
+                app: App::Tile(4),
+                code: Some(3),
+                quick: true
+            }
+        );
+    }
+
+    #[test]
+    fn launch_choice_refuses_a_missing_choice() {
+        let (r, rx) = runner();
+        let t = with_choices(&[&["sh", "-c", "exit 0"], &["sh", "-c", "exit 0"]]);
+        assert!(!r.launch_choice(0, &t, 2));
+        assert!(!r.is_active());
+        assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
     }
 
     #[test]
@@ -613,6 +669,19 @@ mod tests {
         (Arc::new(move |l| sink.lock().unwrap().push(l)), lines)
     }
 
+    /// The collected lines once there are `n` (they can trail `Exited`), or
+    /// whatever arrived within 2 s.
+    fn settled_lines(lines: &Mutex<Vec<String>>, n: usize) -> Vec<String> {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let got = lines.lock().unwrap().clone();
+            if got.len() >= n || Instant::now() > deadline {
+                return got;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
     #[test]
     fn captured_output_reaches_the_callback() {
         let (r, rx) = runner();
@@ -627,7 +696,7 @@ mod tests {
                 quick: false
             }
         );
-        let mut got = lines.lock().unwrap().clone();
+        let mut got = settled_lines(&lines, 2);
         got.sort();
         assert_eq!(got, ["one", "two"]);
     }
@@ -652,7 +721,7 @@ mod tests {
                 quick: false
             }
         );
-        let mut got = lines.lock().unwrap().clone();
+        let mut got = settled_lines(&lines, 4);
         got.sort();
         assert_eq!(got, ["a\u{FFFD}", "b", "c", "d"]);
     }

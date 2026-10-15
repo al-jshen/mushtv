@@ -14,6 +14,9 @@ guide_hold_ms = 1000          # hold a gamepad's Guide button this long to retur
 #   name          shown under the tile
 #   command       program and arguments (a list, not a shell string).
 #                 `flatpak run` commands get --die-with-parent added automatically.
+#   [[tile.choice]] instead of command: two or more, each with a `name` and a
+#                 `command`. Opening the tile asks which one (Settings-style
+#                 list), starting on the one used last.
 #   stop_command  optional; tried first when you press Home, before SIGTERM
 #   icon          optional; a path, relative to /usr/local/share/mushtv/.
 #                 Without it, Flatpak apps use their own icon.
@@ -33,16 +36,26 @@ command = ["flatpak", "run", "com.github.iwalton3.jellyfin-mpv-shim"]
 stop_command = ["flatpak", "run", "--command=jellyfin-mpv-shim", "com.github.iwalton3.jellyfin-mpv-shim", "stop"]
 color = "#101b2e"
 
-# Streams Steam from the gaming PC (Wolf on spc, see server/spc/README.md)
-# over Tailscale. Home disconnects but leaves the game running on spc
+# Streams Steam from the gaming PC over Tailscale, from one of its two Wolf
+# servers (see server/spc/README.md): "spc" renders on the RTX 4060, "spc-igpu"
+# on the integrated graphics, which a game at spc's desk doesn't need. Both
+# share one Steam. Home disconnects but leaves the game running on spc
 # (--no-quit-after); exiting Steam ends the session and returns here.
 [[tile]]
 id = "steam"
 name = "Steam"
-command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc", "Steam",
-           "--1080", "--fps", "60", "--display-mode", "fullscreen", "--multi-controller", "--no-quit-after"]
 icon = "steam.svg"
 color = "#1b2838"
+
+[[tile.choice]]
+name = "Graphics card (RTX 4060)"
+command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc", "Steam",
+           "--1080", "--fps", "60", "--display-mode", "fullscreen", "--multi-controller", "--no-quit-after"]
+
+[[tile.choice]]
+name = "Integrated graphics card"
+command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc-igpu", "Steam",
+           "--1080", "--fps", "60", "--display-mode", "fullscreen", "--multi-controller", "--no-quit-after"]
 
 [[tile]]
 id = "moonlight"

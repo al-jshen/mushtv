@@ -1,6 +1,7 @@
 //! The launcher's own settings (things changed in Settings that no other
 //! service stores), kept in tv's home: `$XDG_STATE_HOME/mushtv/settings.toml`.
 
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,8 @@ use crate::mirroring::MirrorMode;
 #[serde(default)]
 pub struct Prefs {
     pub mirroring_mode: MirrorMode,
+    /// For tiles with choices: tile id → the name of the choice used last.
+    pub last_choice: BTreeMap<String, String>,
 }
 
 /// Where the prefs live for the current user.
@@ -47,6 +50,13 @@ pub fn load(path: &Path) -> Prefs {
     })
 }
 
+/// Changes some prefs and saves them, keeping the rest of the file.
+pub fn update(path: &Path, change: impl FnOnce(&mut Prefs)) -> Result<()> {
+    let mut prefs = load(path);
+    change(&mut prefs);
+    save(path, &prefs)
+}
+
 /// Writes prefs atomically (temporary file, then rename).
 pub fn save(path: &Path, prefs: &Prefs) -> Result<()> {
     let dir = path
@@ -67,7 +77,35 @@ mod tests {
     fn smooth() -> Prefs {
         Prefs {
             mirroring_mode: MirrorMode::Smooth,
+            ..Prefs::default()
         }
+    }
+
+    #[test]
+    fn last_choice_round_trips() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("settings.toml");
+        let mut prefs = Prefs::default();
+        prefs
+            .last_choice
+            .insert("steam".into(), "Integrated graphics card".into());
+        save(&p, &prefs).unwrap();
+        assert_eq!(load(&p), prefs);
+    }
+
+    #[test]
+    fn update_keeps_other_fields() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("settings.toml");
+        update(&p, |p| {
+            p.last_choice
+                .insert("steam".into(), "Integrated graphics card".into());
+        })
+        .unwrap();
+        update(&p, |p| p.mirroring_mode = MirrorMode::Smooth).unwrap();
+        let prefs = load(&p);
+        assert_eq!(prefs.mirroring_mode, MirrorMode::Smooth);
+        assert_eq!(prefs.last_choice["steam"], "Integrated graphics card");
     }
 
     #[test]

@@ -1,3 +1,4 @@
 launcher/target/
 launcher/.devtools/
 .superpowers/
+__pycache__/
