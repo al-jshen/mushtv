@@ -1,17 +1,26 @@
-# Wolf's config on spc: installed to /etc/wolf/cfg/config.toml by setup.sh
-# only when none exists, since Wolf adds paired clients to that file.
+# Template for the Wolf servers' configs on spc. setup.sh fills in @HOSTNAME@
+# ("spc" or "spc-igpu") and @UUID@ (a fresh server ID, which Moonlight uses to
+# tell servers apart) and installs it as /etc/wolf/cfg/config.toml and
+# /etc/wolf-igpu/cfg/config.toml, only where none exists: Wolf adds paired
+# clients to that file.
 #
 # Wolf's default config (games-on-whales/wolf, branch stable @ 6a5053b4,
-# src/moonlight-server/state/default/config.v7.toml) with two changes:
-#  - hostname "spc" instead of "Wolf";
+# src/moonlight-server/state/default/config.v7.toml) with these changes:
+#  - hostname and uuid as above (Wolf only writes a uuid into configs it
+#    generates itself);
 #  - Moonlight's own list (moonlight-profile-id) offers Steam instead of the
 #    "Test ball" demo, so the TV can stream straight into Steam; the Steam
 #    entry moved there from the example "user" profile, so there's one
-#    Steam install rather than two.
+#    Steam install rather than two;
+#  - Steam mounts one shared Steam folder, /etc/wolf-steam, as ~/.steam on
+#    both servers (Steam's client, login and library live there), and
+#    steam-lock.sh, so two Steams never use it at once.
 # The name that will be displayed in Moonlight
-hostname = "spc"
+hostname = "@HOSTNAME@"
 # The version of this config file
 config_version = 7
+# The server ID Moonlight knows this server by
+uuid = "@UUID@"
 # A list of paired clients that will be allowed to stream
 paired_clients = []
 
@@ -60,7 +69,10 @@ start_virtual_compositor = true
 type = "docker"
 name = "WolfSteam"
 image = "ghcr.io/games-on-whales/steam:edge"
-mounts = []
+mounts = [
+    "/etc/wolf-steam:/home/retro/.steam:rw",
+    "/opt/wolf/steam-lock.sh:/etc/cont-init.d/05-mushtv-steam-lock.sh:ro",
+]
 env = [
     "PROTON_LOG=1",
     "RUN_SWAY=true",

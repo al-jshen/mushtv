@@ -1,30 +1,42 @@
 # Wolf, the Moonlight game streaming server on spc: one virtual desktop per
 # client, so streaming never touches the desktop at spc's own monitor.
-# Installed to /opt/wolf and run by wolf.service (see README.md).
-name: wolf
+# One file for both servers; wolf@<gpu>.service runs it with <gpu>.env
+# (nvidia: "spc", amdgpu: "spc-igpu"). Installed to /opt/wolf.
 services:
   wolf:
     image: ghcr.io/games-on-whales/wolf:stable
-    container_name: wolf
+    container_name: ${WOLF_CONTAINER}
     network_mode: host
-    # wolf.service supervises Wolf. A Docker restart policy would start it at
-    # boot before wolf-prestart has set up the firewall and driver volume.
+    # wolf@.service supervises Wolf. A Docker restart policy would start it
+    # at boot before wolf-prestart has set up the firewall and driver volume.
     restart: "no"
     env_file:
-      # WOLF_RENDER_NODE, the chosen GPU's node (by default the RTX 4060;
-      # the numbering follows driver probe order); from wolf-prestart.
-      - /run/wolf/render.env
+      # WOLF_RENDER_NODE, this server's GPU (the numbering follows driver
+      # probe order); from wolf-prestart.
+      - /run/wolf/${WOLF_INSTANCE}/render.env
     environment:
       NVIDIA_DRIVER_VOLUME_NAME: nvidia-driver-vol
       # Apps run as jshen, not as UID 1000 (sandy).
       WOLF_DEFAULT_RUN_UID: "1001"
       WOLF_DEFAULT_RUN_GID: "1001"
+      WOLF_HTTPS_PORT: ${WOLF_HTTPS_PORT}
+      WOLF_HTTP_PORT: ${WOLF_HTTP_PORT}
+      WOLF_CONTROL_PORT: ${WOLF_CONTROL_PORT}
+      WOLF_RTSP_SETUP_PORT: ${WOLF_RTSP_SETUP_PORT}
+      WOLF_VIDEO_PING_PORT: ${WOLF_VIDEO_PING_PORT}
+      WOLF_AUDIO_PING_PORT: ${WOLF_AUDIO_PING_PORT}
     volumes:
-      - /etc/wolf:/etc/wolf:rw
+      # This server's state folder (the env file's WOLF_STATE_DIR) is Wolf's
+      # /etc/wolf. Wolf's start-up derives its config, certificate and
+      # fake-udev paths from it (WOLF_CFG_FILE and friends are overridden),
+      # and keeps each device's app homes in it. Separate folders keep the two
+      # servers' configs, server IDs and per-session udev data apart; Steam
+      # itself is shared by a mount in config.toml.
+      - ${WOLF_STATE_DIR}:/etc/wolf:rw
       # Wolf's runtime dir (its API and PulseAudio sockets), which Wolf mounts
       # into app containers by host path. Without this the image puts it in
       # a new anonymous volume on every start.
-      - /run/wolf/sockets:/run/user/wolf:rw
+      - /run/wolf/${WOLF_INSTANCE}/sockets:/run/user/wolf:rw
       - /var/run/docker.sock:/var/run/docker.sock:rw
       - /dev:/dev:rw
       - /run/udev:/run/udev:rw

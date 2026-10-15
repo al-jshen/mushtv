@@ -1,0 +1,11 @@
+[Unit]
+Description=Ends idle Wolf sessions; one shared Steam at a time
+After=wolf@nvidia.service wolf@amdgpu.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/wolf/wolf_sessions.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

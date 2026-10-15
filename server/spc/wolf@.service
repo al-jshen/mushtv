@@ -1,14 +1,14 @@
 [Unit]
-Description=Wolf game streaming server (Moonlight)
+Description=Wolf game streaming server on the %i GPU
 Requires=docker.service
 After=docker.service network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
 WorkingDirectory=/opt/wolf
-ExecStartPre=/opt/wolf/wolf-prestart
-ExecStart=/usr/bin/docker compose up
-ExecStop=/usr/bin/docker compose down
+ExecStartPre=/opt/wolf/wolf-prestart %i
+ExecStart=/usr/bin/docker compose -p wolf-%i --env-file /opt/wolf/%i.env up
+ExecStop=/usr/bin/docker compose -p wolf-%i --env-file /opt/wolf/%i.env down
 Restart=on-failure
 RestartSec=10
 # Rebuilding the driver volume after a driver update downloads and unpacks

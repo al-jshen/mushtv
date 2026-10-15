@@ -1,30 +1,16 @@
 #!/bin/bash
-# Sets up the Wolf game streaming server on spc (see README.md). Run from
+# Sets up the two Wolf game streaming servers on spc (see README.md). Run from
 # your own account on spc, in a copy of this directory:
-#   sudo bash setup.sh [--gpu nvidia|amdgpu]
-# --gpu picks the GPU Wolf runs on: nvidia (the RTX 4060, the default) or
-# amdgpu (the Ryzen's iGPU). Without it, the current choice stays.
-# Safe to run again: it reinstalls the files and restarts Wolf, but keeps
-# Wolf's config (with its pairings) once there is one.
+#   sudo bash setup.sh
+# Safe to run again: it reinstalls the files and restarts Wolf, but keeps each
+# server's config (with its pairings) once it has one.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-gpu=
-case "${1:-}" in
-"") ;;
---gpu)
-	gpu=${2:-}
-	if [ "$gpu" != nvidia ] && [ "$gpu" != amdgpu ]; then
-		echo "setup.sh: --gpu takes nvidia or amdgpu" >&2
-		exit 1
-	fi
-	;;
-*)
-	echo "usage: sudo bash setup.sh [--gpu nvidia|amdgpu]" >&2
+if [ "$#" -ne 0 ]; then
+	echo "usage: sudo bash setup.sh" >&2
 	exit 1
-	;;
-esac
-
+fi
 if [ "$(id -u)" -ne 0 ]; then
 	echo "setup.sh: run with sudo" >&2
 	exit 1
@@ -43,27 +29,44 @@ udevadm control --reload-rules
 udevadm trigger /dev/uinput /dev/uhid
 
 echo "== Wolf"
+# One server before there were two: wolf.service, with a GPU drop-in.
+if [ -e /etc/systemd/system/wolf.service ]; then
+	systemctl disable --now wolf.service
+	rm -rf /etc/systemd/system/wolf.service /etc/systemd/system/wolf.service.d
+fi
 install -d -m 755 /opt/wolf
-install -m 644 compose.yaml nvidia-driver.Dockerfile /opt/wolf/
+install -m 644 compose.yaml nvidia-driver.Dockerfile nvidia.env amdgpu.env \
+	steam-lock.sh wolf_sessions.py /opt/wolf/
 install -m 755 wolf-prestart /opt/wolf/
-install -m 644 wolf.service /etc/systemd/system/wolf.service
-# The GPU choice lives in a drop-in, so reinstalling wolf.service keeps it.
-dropin=/etc/systemd/system/wolf.service.d/gpu.conf
-if [ "$gpu" = amdgpu ]; then
-	install -d -m 755 "$(dirname "$dropin")"
-	printf '[Service]\nEnvironment=WOLF_GPU=amdgpu\n' >"$dropin"
-elif [ "$gpu" = nvidia ]; then
-	rm -f "$dropin"
-fi
-# Wolf's state includes each app's home folder, with your Steam login in
-# it, so only root may look inside.
-install -d -m 700 /etc/wolf /etc/wolf/cfg
-if [ ! -e /etc/wolf/cfg/config.toml ]; then
-	install -m 600 config.toml /etc/wolf/cfg/config.toml
-fi
+install -m 644 wolf@.service wolf-sessions.service /etc/systemd/system/
+# Each server's state (config, pairings, certificate, each device's app
+# homes) is readable only by root. The shared Steam folder (mounted as
+# ~/.steam by both servers' Steam, which runs as you) holds your Steam login.
+install -d -m 700 /etc/wolf /etc/wolf-igpu
+install -d -m 700 -o "$user" -g "$user" /etc/wolf-steam
+
+# Each server's config: from the template, with its name and a fresh server
+# ID. A config without the Steam lock predates two servers: keep it as
+# config.toml.bak and replace it (devices then pair again).
+config_for() { # <dir> <hostname>
+	local cfg="$1/config.toml"
+	install -d -m 700 "$1"
+	if [ -e "$cfg" ] && grep -q steam-lock "$cfg"; then
+		return
+	fi
+	if [ -e "$cfg" ]; then
+		cp -p "$cfg" "$cfg.bak"
+		echo "$cfg: replaced (old one kept as config.toml.bak); pair devices again"
+	fi
+	sed -e "s/@HOSTNAME@/$2/" -e "s/@UUID@/$(cat /proc/sys/kernel/random/uuid)/" config.toml >"$cfg"
+	chmod 600 "$cfg"
+}
+config_for /etc/wolf/cfg spc
+config_for /etc/wolf-igpu/cfg spc-igpu
+
 systemctl daemon-reload
-systemctl enable wolf.service
-echo "Starting Wolf. The first start builds the NVIDIA driver volume and"
-echo "downloads Wolf, which takes a few minutes."
-systemctl restart wolf.service
-systemctl --no-pager --lines=5 status wolf.service
+systemctl enable wolf@nvidia.service wolf@amdgpu.service wolf-sessions.service
+echo "Starting both servers. After a driver update the first start rebuilds the"
+echo "NVIDIA driver volume, which takes a few minutes."
+systemctl restart wolf@nvidia.service wolf@amdgpu.service wolf-sessions.service
+systemctl --no-pager --lines=3 status wolf@nvidia.service wolf@amdgpu.service wolf-sessions.service
