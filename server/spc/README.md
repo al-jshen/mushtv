@@ -58,6 +58,15 @@ The first start pulls Wolf and builds the driver volume, which takes a few minut
 
 **Pairing** a Moonlight client: pair with `spc` and with `spc:48989` (the second server's port). Each shows a PIN; find the PIN link in that server's log (`docker logs wolf | grep -i pin`, `docker logs wolf-igpu | grep -i pin`) and submit the PIN from spc at `http://localhost:47989/pin/#<secret>` (or `:48989`).
 
+**Pairing the TV** (it has no Moonlight menus): run these on the TV box (substrate) while a watcher on spc approves the PIN, or submit it by hand as above. If Moonlight still remembers an old pairing with a server whose pairings were reset, it keeps using that and never asks for a PIN; clear its saved servers first (only the `[hosts]` section; a `.bak` is kept):
+```
+sudo pkill -u tv -x moonlight
+sudo -u tv sed -i.bak '/^\[hosts\]$/,/^\[/{/^\[hosts\]$/d;/^\[/!d}' "/home/tv/.var/app/com.moonlight_stream.Moonlight/config/Moonlight Game Streaming Project/Moonlight.conf"
+sudo -u tv env XDG_RUNTIME_DIR=/run/user/1002 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus QT_QPA_PLATFORM=offscreen timeout 120 flatpak run --die-with-parent com.moonlight_stream.Moonlight pair spc --pin 1234
+sudo -u tv env XDG_RUNTIME_DIR=/run/user/1002 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1002/bus QT_QPA_PLATFORM=offscreen timeout 120 flatpak run --die-with-parent com.moonlight_stream.Moonlight pair spc:48989 --pin 1234
+```
+(Headless pairing doesn't exit by itself; `timeout` ends it.)
+
 ## Using it
 
 - **Address:** clients reach both over Tailscale (`spc`, `spc:48989`). Moonlight treats Tailscale addresses as remote and keeps packets small enough for it.

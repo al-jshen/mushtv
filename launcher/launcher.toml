@@ -56,9 +56,3 @@ command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc", 
 name = "Integrated graphics card"
 command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc-igpu", "Steam",
            "--1080", "--fps", "60", "--display-mode", "fullscreen", "--multi-controller", "--no-quit-after"]
-
-[[tile]]
-id = "moonlight"
-name = "Moonlight"
-command = ["flatpak", "run", "com.moonlight_stream.Moonlight"]
-color = "#14202b"

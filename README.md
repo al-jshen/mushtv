@@ -1,6 +1,6 @@
 # mushtv
 
-TV on substrate: the homelab box boots into a full-screen, remote-friendly launcher on the living-room TV. The launcher has tiles for YouTube (VacuumTube), Jellyfin (jellyfin-mpv-shim), Steam (streamed from the gaming PC) and Moonlight. The server workloads keep running underneath.
+TV on substrate: the homelab box boots into a full-screen, remote-friendly launcher on the living-room TV. The launcher has tiles for YouTube (VacuumTube), Jellyfin (jellyfin-mpv-shim) and Steam (streamed from the gaming PC with Moonlight). The server workloads keep running underneath.
 
 - Background and decisions: `handoff.md`, `docs/superpowers/specs/2026-10-13-tv-launcher-design.md`
 - Launcher source: `launcher/` (Rust + Slint)
@@ -82,7 +82,7 @@ The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC
 - **Home** (or F12) disconnects but leaves the game running on spc. Opening the tile again with the same GPU picks up where you left off. A session left paused for 30 minutes is ended on spc by itself.
 - **To end a session,** choose Power → Exit Steam in Steam. The stream closes and the TV returns to the tiles.
 - **Controllers, keyboard and mouse** are passed through to Steam; games see controllers as Xbox controllers (see `server/spc/README.md` for why). Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard.
-- **The Moonlight tile** opens Moonlight's own menus, which are useful for pairing or other hosts. After a stream ends there, its window can stay black; press Home.
+- **Moonlight's own menus** (its settings such as bitrate, Wolf's other apps) have no tile; Moonlight is still installed, so a tile is five lines in `launcher/launcher.toml` if you want them (`command = ["flatpak", "run", "com.moonlight_stream.Moonlight"]`). After a stream ends there, its window can stay black; press Home. Pairing is done from the command line (see `server/spc/README.md`).
 
 Setup, the GPU choice and limits are in [`server/spc/README.md`](server/spc/README.md). Moonlight's log is `sudo journalctl -t mushtv-steam`.
 
