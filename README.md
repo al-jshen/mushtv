@@ -78,7 +78,7 @@ The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC
   - **Graphics card (RTX 4060)** streams from the server `spc`: full power, but not while someone is playing a game at spc's desk (the card runs out of memory and Moonlight says "No video received from host").
   - **Integrated graphics card** streams from `spc-igpu`: light games (Overcooked 2 and the like) without touching the RTX 4060.
   - Up/Down and OK choose; Back or Home cancels. It starts on the one used last (saved in `~/.local/state/mushtv/settings.toml`, tv's home).
-- **Both share one Steam:** one login, games installed once. Only one runs at a time, so picking one GPU ends a session left open on the other (unsaved progress there is lost).
+- **Both share one Steam:** one login, games installed once, and the same saves and game settings, so a game continues on either GPU. Only one runs at a time, so picking one GPU ends a session left open on the other (unsaved progress there is lost).
 - **Home** (or F12) disconnects but leaves the game running on spc. Opening the tile again with the same GPU picks up where you left off. A session left paused for 30 minutes is ended on spc by itself.
 - **To end a session,** choose Power → Exit Steam in Steam. The stream closes and the TV returns to the tiles.
 - **Controllers, keyboard and mouse** are passed through to Steam; games see controllers as Xbox controllers (see `server/spc/README.md` for why). Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard.

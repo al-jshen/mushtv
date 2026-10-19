@@ -79,5 +79,89 @@ class TemplateTest(unittest.TestCase):
             self.assertEqual(env_file(instance)["WOLF_STATE_DIR"], state)
 
 
+
+class SharedHomeTest(unittest.TestCase):
+    """steam-lock.sh also shares ~/.config and ~/.local (where native Linux
+    games save) between the servers, through the shared ~/.steam."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = os.path.join(self.tmp.name, "home")
+        os.makedirs(os.path.join(self.home, ".steam"))  # the shared mount
+        with open(os.path.join(HERE, "steam-lock.sh")) as f:
+            script = f.read().replace("/home/retro", self.home)
+        self.script = os.path.join(self.tmp.name, "init.sh")
+        with open(self.script, "w") as f:
+            f.write(script)
+
+    def run_init(self):
+        """Sources the script like the image's entrypoint does (set -e)."""
+        env = dict(os.environ, PUID=str(os.getuid()), PGID=str(os.getgid()))
+        r = subprocess.run(
+            ["bash", "-c", f'set -e; gow_log() {{ echo "$*"; }}; source "{self.script}"; echo sourced-ok'],
+            env=env, capture_output=True, text=True,
+        )
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("sourced-ok", r.stdout)
+
+    def write(self, rel, text):
+        path = os.path.join(self.home, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    def read(self, rel):
+        with open(os.path.join(self.home, rel)) as f:
+            return f.read()
+
+    def assertShared(self, d):
+        link = os.path.join(self.home, "." + d)
+        self.assertTrue(os.path.islink(link), link)
+        self.assertEqual(os.readlink(link), f".steam/mushtv-home/{d}")
+
+    def test_first_server_seeds_the_shared_folders(self):
+        self.write(".config/game/save", "progress")
+        self.write(".local/share/game/save", "more")
+        self.run_init()
+        self.assertShared("config")
+        self.assertShared("local")
+        self.assertEqual(self.read(".config/game/save"), "progress")
+        self.assertEqual(self.read(".steam/mushtv-home/local/share/game/save"), "more")
+        self.assertEqual(self.read(".config.mushtv-old/game/save"), "progress")
+
+    def test_second_server_uses_the_shared_copy_and_keeps_its_own(self):
+        self.write(".steam/mushtv-home/config/game/save", "rtx")
+        self.write(".config/game/save", "igpu")
+        self.run_init()
+        self.assertShared("config")
+        self.assertEqual(self.read(".config/game/save"), "rtx")
+        self.assertEqual(self.read(".config.mushtv-old/game/save"), "igpu")
+
+    def test_running_again_changes_nothing(self):
+        self.write(".config/game/save", "progress")
+        self.run_init()
+        self.run_init()
+        self.assertShared("config")
+        self.assertEqual(sorted(n for n in os.listdir(self.home) if n.startswith(".config")),
+                         [".config", ".config.mushtv-old"])
+
+    def test_a_new_home_gets_empty_shared_folders(self):
+        self.run_init()
+        self.assertShared("config")
+        self.assertShared("local")
+        self.assertTrue(os.path.isdir(os.path.join(self.home, ".config")))
+
+    def test_an_old_backup_is_not_overwritten(self):
+        self.write(".config.mushtv-old/keep", "first backup")
+        self.write(".steam/mushtv-home/config/x", "shared")
+        self.write(".config/game/save", "local")
+        self.run_init()
+        self.assertEqual(self.read(".config.mushtv-old/keep"), "first backup")
+        backups = [n for n in os.listdir(self.home) if n.startswith(".config.mushtv-old.")]
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(self.read(f"{backups[0]}/game/save"), "local")
+
+
 if __name__ == "__main__":
     unittest.main()
