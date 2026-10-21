@@ -138,15 +138,17 @@ id = 'moonlight-profile-id'
 
 class SharedHomeTest(unittest.TestCase):
     """steam-lock.sh also shares ~/.config and ~/.local (where native Linux
-    games save) between the servers, through the shared ~/.steam."""
+    games save) between the servers, through the shared ~/.steam, and hides
+    an idle pointer."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = os.path.join(self.tmp.name, "home")
         os.makedirs(os.path.join(self.home, ".steam"))  # the shared mount
+        self.sway = os.path.join(self.tmp.name, "sway-config.d")
         with open(os.path.join(HERE, "steam-lock.sh")) as f:
-            script = f.read().replace("/home/retro", self.home)
+            script = f.read().replace("/home/retro", self.home).replace("/etc/sway/config.d", self.sway)
         self.script = os.path.join(self.tmp.name, "init.sh")
         with open(self.script, "w") as f:
             f.write(script)
@@ -207,6 +209,11 @@ class SharedHomeTest(unittest.TestCase):
         self.assertShared("config")
         self.assertShared("local")
         self.assertTrue(os.path.isdir(os.path.join(self.home, ".config")))
+
+    def test_sway_hides_an_idle_pointer(self):
+        self.run_init()
+        settings = [open(os.path.join(self.sway, n)).read() for n in os.listdir(self.sway)]
+        self.assertEqual(settings, ["seat * hide_cursor 1000\n"])
 
     def test_an_old_backup_is_not_overwritten(self):
         self.write(".config.mushtv-old/keep", "first backup")

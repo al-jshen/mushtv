@@ -1,10 +1,13 @@
 # mushtv: sourced as root by the Steam container's entrypoint before Steam
 # starts; both servers' config mounts it as
-# /etc/cont-init.d/05-mushtv-steam-lock.sh. Both Wolf servers mount one shared
-# Steam folder as ~/.steam, so wait for any other Steam using it to exit. When
-# switching servers Wolf usually removes the other server's Steam container
-# itself (same name), so this is a backstop. The lock stays held on
-# descriptor 9, which Steam inherits, until this container exits.
+# /etc/cont-init.d/05-mushtv-steam-lock.sh. It takes the Steam lock, shares
+# game saves and hides an idle pointer (each below).
+#
+# Both Wolf servers mount one shared Steam folder as ~/.steam, so wait for any
+# other Steam using it to exit. When switching servers Wolf usually removes
+# the other server's Steam container itself (same name), so this is a
+# backstop. The lock stays held on descriptor 9, which Steam inherits, until
+# this container exits.
 exec 9>>/home/retro/.steam/.mushtv-steam.lock
 if ! flock -n 9; then
 	gow_log "[mushtv] waiting up to 60 s for the other server's Steam to close"
@@ -46,3 +49,10 @@ for mushtv_dir in config local; do
 	gow_log "[mushtv] ~/.$mushtv_dir is now the shared one"
 done
 unset mushtv_dir mushtv_link mushtv_shared mushtv_old
+
+# Hide the pointer after a second without mouse movement; played with a
+# controller, it would sit in the middle of the screen. Sway (Steam's window
+# manager) reads this folder at start. It's inside the container, so it's
+# rewritten on each start.
+mkdir -p /etc/sway/config.d
+echo 'seat * hide_cursor 1000' >/etc/sway/config.d/50-mushtv-hide-cursor.conf
