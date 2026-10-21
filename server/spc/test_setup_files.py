@@ -3,6 +3,7 @@ python3 -m unittest -v test_setup_files (the compose test needs docker)."""
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -70,6 +71,16 @@ class TemplateTest(unittest.TestCase):
         self.assertIn(f"{SHARED_STEAM}:/home/retro/.steam:rw", mounts)
         self.assertIn("/opt/wolf/steam-lock.sh:/etc/cont-init.d/05-mushtv-steam-lock.sh:ro", mounts)
 
+    def test_steam_gets_the_time_zone_and_no_proton_log(self):
+        # The Steam image's own time zone is Europe/London; setup.sh fills in
+        # spc's. Proton's debug log grew to 4 GB in one evening.
+        with open(os.path.join(HERE, "config.toml"), "rb") as f:
+            config = tomllib.load(f)
+        steam = [a for p in config["profiles"] for a in p["apps"] if a["title"] == "Steam"]
+        env = steam[0]["runner"]["env"]
+        self.assertIn("TZ=@TZ@", env)
+        self.assertFalse([e for e in env if e.startswith("PROTON_LOG")], env)
+
     def test_the_lock_lives_in_the_shared_folder(self):
         with open(os.path.join(HERE, "steam-lock.sh")) as f:
             self.assertIn("/home/retro/.steam/.mushtv-steam.lock", f.read())
@@ -78,6 +89,51 @@ class TemplateTest(unittest.TestCase):
         for instance, state in STATE.items():
             self.assertEqual(env_file(instance)["WOLF_STATE_DIR"], state)
 
+
+class ConfigForTest(unittest.TestCase):
+    """setup.sh's config_for, run on its own in a temporary folder."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        with open(os.path.join(HERE, "setup.sh")) as f:
+            self.function = re.search(r"^config_for\(\) \{.*?^\}$", f.read(), re.M | re.S).group(0)
+        self.cfg = os.path.join(self.tmp.name, "cfg", "config.toml")
+
+    def config_for(self, tz):
+        subprocess.run(
+            ["bash", "-c", f'set -euo pipefail; tz="{tz}"\n{self.function}\nconfig_for "{os.path.dirname(self.cfg)}" spc'],
+            cwd=HERE, check=True, capture_output=True, text=True,
+        )
+        with open(self.cfg) as f:
+            return f.read()
+
+    def steam_env(self, text):
+        config = tomllib.loads(text)
+        return [a for p in config["profiles"] for a in p["apps"] if a["title"] == "Steam"][0]["runner"]["env"]
+
+    def test_a_new_config_gets_the_time_zone(self):
+        text = self.config_for("America/New_York")
+        self.assertNotRegex(text, r"@[A-Z]+@")
+        self.assertIn("TZ=America/New_York", self.steam_env(text))
+
+    def test_a_kept_config_gets_the_time_zone_instead_of_the_proton_log(self):
+        # As Wolf rewrites it: single quotes, one line.
+        os.makedirs(os.path.dirname(self.cfg))
+        with open(self.cfg, "w") as f:
+            f.write("""hostname = 'spc'
+[[profiles]]
+id = 'moonlight-profile-id'
+    [[profiles.apps]]
+    title = 'Steam'
+        [profiles.apps.runner]
+        env = [ 'PROTON_LOG=1', 'RUN_SWAY=true', 'GOW_REQUIRED_DEVICES=/dev/input/* /dev/dri/* /dev/nvidia*' ]
+        mounts = [ '/opt/wolf/steam-lock.sh:/etc/cont-init.d/05-mushtv-steam-lock.sh:ro' ]
+""")
+        env = self.steam_env(self.config_for("America/New_York"))
+        self.assertEqual(env[:2], ["TZ=America/New_York", "RUN_SWAY=true"])
+        env = self.steam_env(self.config_for("Europe/Paris"))
+        self.assertEqual(env[:2], ["TZ=Europe/Paris", "RUN_SWAY=true"])
 
 
 class SharedHomeTest(unittest.TestCase):

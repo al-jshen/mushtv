@@ -45,20 +45,26 @@ install -m 644 wolf@.service wolf-sessions.service /etc/systemd/system/
 install -d -m 700 /etc/wolf /etc/wolf-igpu
 install -d -m 700 -o "$user" -g "$user" /etc/wolf-steam
 
-# Each server's config: from the template, with its name and a fresh server
-# ID. A config without the Steam lock predates two servers: keep it as
-# config.toml.bak and replace it (devices then pair again).
+# Each server's config: from the template, with its name, a fresh server ID
+# and spc's time zone (for Steam's clock). A config without the Steam lock
+# predates two servers: keep it as config.toml.bak and replace it (devices
+# then pair again). A config that's kept gets the current time zone; ones
+# from before the time zone have Proton's debug log in its place.
+tz=$(timedatectl show -p Timezone --value)
 config_for() { # <dir> <hostname>
 	local cfg="$1/config.toml"
 	install -d -m 700 "$1"
 	if [ -e "$cfg" ] && grep -q steam-lock "$cfg"; then
+		sed -i -e "s|\([\"']\)PROTON_LOG=1\([\"']\)|\1TZ=$tz\2|" \
+			-e "s|\([\"']\)TZ=[^\"']*\([\"']\)|\1TZ=$tz\2|" "$cfg"
 		return
 	fi
 	if [ -e "$cfg" ]; then
 		cp -p "$cfg" "$cfg.bak"
 		echo "$cfg: replaced (old one kept as config.toml.bak); pair devices again"
 	fi
-	sed -e "s/@HOSTNAME@/$2/" -e "s/@UUID@/$(cat /proc/sys/kernel/random/uuid)/" config.toml >"$cfg"
+	sed -e "s/@HOSTNAME@/$2/" -e "s/@UUID@/$(cat /proc/sys/kernel/random/uuid)/" -e "s|@TZ@|$tz|" \
+		config.toml >"$cfg"
 	chmod 600 "$cfg"
 }
 config_for /etc/wolf/cfg spc

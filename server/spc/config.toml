@@ -14,7 +14,10 @@
 #    Steam install rather than two;
 #  - Steam mounts one shared Steam folder, /etc/wolf-steam, as ~/.steam on
 #    both servers (Steam's client, login and library live there), and
-#    steam-lock.sh, so two Steams never use it at once.
+#    steam-lock.sh, so two Steams never use it at once;
+#  - Steam gets spc's time zone (TZ, filled in by setup.sh; the image's own is
+#    Europe/London) instead of PROTON_LOG=1, Proton's debug log, which
+#    writes gigabytes an hour into the app home.
 # The name that will be displayed in Moonlight
 hostname = "@HOSTNAME@"
 # The version of this config file
@@ -74,7 +77,7 @@ mounts = [
     "/opt/wolf/steam-lock.sh:/etc/cont-init.d/05-mushtv-steam-lock.sh:ro",
 ]
 env = [
-    "PROTON_LOG=1",
+    "TZ=@TZ@",
     "RUN_SWAY=true",
     "GOW_REQUIRED_DEVICES=/dev/input/* /dev/dri/* /dev/nvidia*",
 ]
