@@ -116,7 +116,11 @@ The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC
 - **Both share one Steam:** one login, games installed once, and the same saves and game settings, so a game continues on either GPU. Only one runs at a time, so picking one GPU ends a session left open on the other (unsaved progress there is lost).
 - **Home** (or F12) disconnects but leaves the game running on spc. Opening the tile again with the same GPU picks up where you left off. A session left paused for 30 minutes is ended on spc by itself.
 - **To end a session,** choose Power → Exit Steam in Steam. The stream closes and the TV returns to the tiles.
-- **Controllers, keyboard and mouse** are passed through to Steam; games see controllers as Xbox controllers (see `server/spc/README.md` for why). Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard. The pointer hides after a second without mouse movement.
+- **Controllers, keyboard and mouse** are passed through to Steam; games see controllers as Xbox controllers (see `server/spc/README.md` for why). Steam's screensaver wakes up only for a controller or the mouse, so turn it off in Steam's settings if you play with a keyboard. The pointer hides after a second without mouse movement. The TV box itself shows a mouse pointer whenever its compositor (cage) thinks a mouse is connected. Two things that aren't mice used to count as one, which left a pointer in the middle of the screen; deploy installs fixes for both, and they take effect when the TV session restarts:
+  - **Keyboard interfaces with a scroll axis:** a keyboard's media keys ("… Consumer Control"), and the keyboard part of 8BitDo's 2.4 GHz receiver, count as a keyboard with a scroll wheel. `deploy/libinput-local-overrides.quirks` drops those scroll axes; the keys still work.
+  - **8BitDo's 2.4 GHz receiver's mouse:** it never moves. `deploy/8bitdo-mouse.rules` makes the TV ignore it.
+
+  To check what cage thinks is connected, run `sudo -u tv env XDG_RUNTIME_DIR=/run/user/1002 python3 -I - < scripts/seat-capabilities.py` from the repo. It should say "keyboard" only, unless a real mouse is plugged in.
 - **Moonlight's own menus** (its settings such as bitrate, Wolf's other apps) have no tile; Moonlight is still installed, so a tile is five lines in `launcher/launcher.toml` if you want them (`command = ["flatpak", "run", "com.moonlight_stream.Moonlight"]`). After a stream ends there, its window can stay black; press Home. Pairing is done from the command line (see `server/spc/README.md`).
 
 Setup, the GPU choice and limits are in [`server/spc/README.md`](server/spc/README.md). Moonlight's log is `sudo journalctl -t mushtv-steam`.
@@ -187,6 +191,7 @@ These can't be tested without the TV connected:
 - [ ] Steam tile: switching GPUs ends the session on the other one, and Steam starts (with the same login) within a minute.
 - [ ] Steam tile: Home (and F12) returns to the tiles; opening the tile again resumes the same game.
 - [ ] Steam tile: Power → Exit Steam returns the TV to the tiles.
+- [ ] No pointer on the tiles or over a Steam stream, with the keyboard plugged in and the 8BitDo controller on (after `sudo ./deploy.sh --restart`).
 - [ ] Wi-Fi switch: after `deploy/wifi-switch-to-iwd.sh`, Settings → Wi-Fi lists networks, home Wi-Fi is connected, and Ethernet keeps the default route.
 - [ ] Wi-Fi: join a phone hotspot with only a controller, then again (Forget first) with only a keyboard.
 - [ ] Wi-Fi: a wrong password brings the keyboard back with the text kept, and a toast.

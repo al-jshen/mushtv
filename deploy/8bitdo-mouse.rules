@@ -1,0 +1,8 @@
+# mushtv: 8BitDo's 2.4 GHz receivers add a mouse device next to the gamepad
+# (the Ultimate 2C's is "8BitDo Ultimate 2C Wireless Controller Mouse"). It
+# never moves, but cage draws a pointer in the middle of the screen for as
+# long as any mouse is connected, over Moonlight's picture too. Tell libinput
+# to ignore it; the gamepad and the receiver's keyboard part are unaffected.
+# Installed by deploy.sh as /etc/udev/rules.d/70-mushtv-8bitdo-mouse.rules
+# (after 60-persistent-input.rules, which sets ID_INPUT_MOUSE and the IDs).
+ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_VENDOR_ID}=="2dc8", ENV{ID_INPUT_MOUSE}=="1", ENV{LIBINPUT_IGNORE_DEVICE}="1"

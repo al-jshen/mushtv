@@ -94,6 +94,10 @@ if [ -d "$repo/launcher/assets/share" ]; then
 fi
 install_file 644 "$config" "$dest/etc/mushtv/launcher.toml"
 install_file 644 "$repo/deploy/autologin.conf" "$dest/etc/systemd/system/getty@tty1.service.d/autologin.conf"
+# No mouse pointer on the TV from devices that aren't mice: 8BitDo's
+# receiver's dummy mouse, and keyboards' media keys with a scroll axis.
+install_file 644 "$repo/deploy/8bitdo-mouse.rules" "$dest/etc/udev/rules.d/70-mushtv-8bitdo-mouse.rules"
+install_file 644 "$repo/deploy/libinput-local-overrides.quirks" "$dest/etc/libinput/local-overrides.quirks"
 # Wi-Fi through iwd (Settings → Wi-Fi). These do nothing until iwd is
 # installed by deploy/wifi-switch-to-iwd.sh, which you run once yourself.
 install_file 644 "$repo/deploy/dbus-mushtv-iwd.conf" "$dest/etc/dbus-1/system.d/mushtv-iwd.conf"
@@ -118,6 +122,9 @@ install_tv_file "$repo/deploy/wireplumber-hdmi.conf" \
 
 if [ -z "$dest" ]; then
   systemctl daemon-reload
+  # New udev rules apply to devices as they connect (the 8BitDo rule: the
+  # next time the controller wakes).
+  udevadm control --reload-rules
   # Apply a changed audio config now: restarting tv's WirePlumber moves any
   # playing audio to the new output (a short blip), without closing the app.
   # Needed even with --restart: logind keeps tv's user services (PipeWire,

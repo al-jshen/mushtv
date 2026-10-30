@@ -26,6 +26,8 @@ check "iwd D-Bus policy installed 644" test "$(stat -c %a "$s/etc/dbus-1/system.
 check "iwd main.conf installed 644" test "$(stat -c %a "$s/etc/iwd/main.conf" 2>/dev/null)" = 644
 check "iwd keeps the kernel's interface" grep -qx 'DefaultInterface=\*' "$s/etc/iwd/main.conf"
 check "iwd's interface renaming masked" test "$(readlink "$s/etc/systemd/network/80-iwd.link")" = /dev/null
+check "8BitDo mouse rule installed 644" test "$(stat -c %a "$s/etc/udev/rules.d/70-mushtv-8bitdo-mouse.rules" 2>/dev/null)" = 644
+check "libinput quirk installed 644" test "$(stat -c %a "$s/etc/libinput/local-overrides.quirks" 2>/dev/null)" = 644
 
 # A second run changes nothing.
 deploy "$s"

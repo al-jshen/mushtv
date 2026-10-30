@@ -1,0 +1,18 @@
+# mushtv: keyboards' extra interfaces often report a horizontal scroll axis
+# (AC Pan): a keyboard's media keys ("<keyboard> Consumer Control"), and the
+# keyboard part of 8BitDo's 2.4 GHz receiver ("8BitDo ... Keyboard").
+# libinput makes a keyboard with a scroll wheel a pointer, so cage draws its
+# mouse pointer in the middle of the TV for as long as such a device is
+# connected. Drop those scroll axes; the keys keep working. Matched by
+# interface name, so real mice ("... Mouse") keep their wheels. Installed by
+# deploy.sh as /etc/libinput/local-overrides.quirks; cage reads it when it
+# starts.
+
+[mushtv: no scrolling on keyboards' Consumer Control]
+MatchName=*Consumer Control
+AttrEventCode=-REL_WHEEL;-REL_WHEEL_HI_RES;-REL_HWHEEL;-REL_HWHEEL_HI_RES;
+
+[mushtv: no scrolling on keyboard interfaces]
+MatchName=*Keyboard
+MatchUdevType=keyboard
+AttrEventCode=-REL_WHEEL;-REL_WHEEL_HI_RES;-REL_HWHEEL;-REL_HWHEEL_HI_RES;
