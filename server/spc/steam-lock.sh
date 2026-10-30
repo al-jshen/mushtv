@@ -1,7 +1,7 @@
 # mushtv: sourced as root by the Steam container's entrypoint before Steam
 # starts; both servers' config mounts it as
 # /etc/cont-init.d/05-mushtv-steam-lock.sh. It takes the Steam lock, shares
-# game saves and hides an idle pointer (each below).
+# game saves, hides an idle pointer and turns off Proton's Xalia (each below).
 #
 # Both Wolf servers mount one shared Steam folder as ~/.steam, so wait for any
 # other Steam using it to exit. When switching servers Wolf usually removes
@@ -56,3 +56,9 @@ unset mushtv_dir mushtv_link mushtv_shared mushtv_old
 # rewritten on each start.
 mkdir -p /etc/sway/config.d
 echo 'seat * hide_cursor 1000' >/etc/sway/config.d/50-mushtv-hide-cursor.conf
+
+# Proton starts Xalia (a controller helper for Windows-style menus) next to
+# every Windows game. It kept Wine's server busy, which made text boxes and
+# the Steam menu lag in PlateUp!. Exported here, it reaches Steam and, through
+# it, every game; Proton honours a value that's already set.
+export PROTON_USE_XALIA=0

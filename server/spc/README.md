@@ -29,7 +29,7 @@ spc is the gaming PC (RTX 4060) that the TV streams games from with Moonlight. S
 | `wolf@.service` | `/etc/systemd/system/` | One instance per server; runs `wolf-prestart`, then Wolf. |
 | `wolf-prestart` | `/opt/wolf/` | Firewall, GPU node, driver volume; see below. |
 | `nvidia-driver.Dockerfile` | `/opt/wolf/` | Builds the NVIDIA driver for Wolf's containers (from Games on Whales). |
-| `steam-lock.sh` | `/opt/wolf/` | The Steam lock, the shared saves and the hidden pointer, mounted into Steam's container. Tests in `test_setup_files`. |
+| `steam-lock.sh` | `/opt/wolf/` | The Steam lock, the shared saves, the hidden pointer and Xalia off (below), mounted into Steam's container. Tests in `test_setup_files`. |
 | `wolf_sessions.py`, `wolf-sessions.service` | `/opt/wolf/`, `/etc/systemd/system/` | The session guard. Tests: `python3 -m unittest -v test_wolf_sessions` here. |
 | `85-wolf.rules` | `/etc/udev/rules.d/` | Wolf's virtual input rules (from Wolf). |
 | `config.toml` | `/etc/wolf/cfg/`, `/etc/wolf-igpu/cfg/` | Template for each server's config (name, fresh server ID, shared Steam and lock mounts, spc's time zone for Steam), installed only where none exists: Wolf adds paired clients to it. Re-running `setup.sh` updates only the time zone in a config it keeps. |
@@ -79,6 +79,7 @@ sudo -u tv env XDG_RUNTIME_DIR=/run/user/1002 DBUS_SESSION_BUS_ADDRESS=unix:path
     -d '{"client_id":"5334278758390175681","settings":{"controllers_override":["XBOX","XBOX","XBOX","XBOX"]}}'
   ```
   (and the same with `amdgpu`; `GET /api/v1/clients` lists device IDs).
+- **Xalia is off** for every game (`PROTON_USE_XALIA=0`). Proton starts this controller helper for Windows-style menus next to every Windows game. Here it kept Wine's server busy, and PlateUp!'s text boxes and the Steam menu lagged badly until it was stopped. To turn it back on for one game, set that game's Launch Options to `PROTON_USE_XALIA=1 %command%`.
 - **Steam's clock** follows spc's time zone, set when `setup.sh` runs (the Steam image's own is London's); after changing spc's time zone, run it again.
 - **Logs:** `docker logs -f wolf`, `docker logs -f wolf-igpu`; `sudo journalctl -u wolf@nvidia -u wolf@amdgpu -u wolf-sessions`.
 - **Stop or start:** `sudo systemctl stop wolf@amdgpu` (or `wolf@nvidia`), and `start`. Remove everything with `sudo systemctl disable --now wolf@nvidia wolf@amdgpu wolf-sessions`, then delete the installed files above.

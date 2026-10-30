@@ -157,11 +157,12 @@ class SharedHomeTest(unittest.TestCase):
         """Sources the script like the image's entrypoint does (set -e)."""
         env = dict(os.environ, PUID=str(os.getuid()), PGID=str(os.getgid()))
         r = subprocess.run(
-            ["bash", "-c", f'set -e; gow_log() {{ echo "$*"; }}; source "{self.script}"; echo sourced-ok'],
+            ["bash", "-c", f'set -e; gow_log() {{ echo "$*"; }}; source "{self.script}"; echo sourced-ok; echo "xalia=${{PROTON_USE_XALIA-unset}}"'],
             env=env, capture_output=True, text=True,
         )
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("sourced-ok", r.stdout)
+        return r.stdout
 
     def write(self, rel, text):
         path = os.path.join(self.home, rel)
@@ -214,6 +215,11 @@ class SharedHomeTest(unittest.TestCase):
         self.run_init()
         settings = [open(os.path.join(self.sway, n)).read() for n in os.listdir(self.sway)]
         self.assertEqual(settings, ["seat * hide_cursor 1000\n"])
+
+    def test_proton_games_start_without_xalia(self):
+        # Xalia, Proton's controller helper for Windows menus, kept Wine's
+        # server busy and made PlateUp!'s text boxes and the Steam menu lag.
+        self.assertIn("xalia=0", self.run_init())
 
     def test_an_old_backup_is_not_overwritten(self):
         self.write(".config.mushtv-old/keep", "first backup")
