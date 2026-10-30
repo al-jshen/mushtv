@@ -1,0 +1,13 @@
+auto lo
+iface lo inet loopback
+
+# Ethernet first (lower metric).
+allow-hotplug enp3s0
+iface enp3s0 inet dhcp
+    metric 100
+
+allow-hotplug wlp2s0
+iface wlp2s0 inet dhcp
+    wpa-ssid Home Net
+    wpa-psk  correct horse battery
+    metric 600

@@ -22,6 +22,10 @@ check "autologin installed" test -f "$s/etc/systemd/system/getty@tty1.service.d/
 check "bash_profile installed" test -f "$s/home/tv/.bash_profile"
 wp="$s/home/tv/.config/wireplumber/wireplumber.conf.d/51-mushtv-hdmi.conf"
 check "HDMI audio rule installed 644" test "$(stat -c %a "$wp" 2>/dev/null)" = 644
+check "iwd D-Bus policy installed 644" test "$(stat -c %a "$s/etc/dbus-1/system.d/mushtv-iwd.conf" 2>/dev/null)" = 644
+check "iwd main.conf installed 644" test "$(stat -c %a "$s/etc/iwd/main.conf" 2>/dev/null)" = 644
+check "iwd keeps the kernel's interface" grep -qx 'DefaultInterface=\*' "$s/etc/iwd/main.conf"
+check "iwd's interface renaming masked" test "$(readlink "$s/etc/systemd/network/80-iwd.link")" = /dev/null
 
 # A second run changes nothing.
 deploy "$s"

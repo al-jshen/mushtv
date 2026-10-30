@@ -1,0 +1,107 @@
+// The password keyboard: a panel over the lower part of the screen with a
+// title, the typed text (dots unless shown) and the keys. Positions come
+// from the launcher in half-key units on a 22-unit board.
+export struct KeyCapData {
+    // The key's text, or a Material Icons glyph when `icon` is set.
+    label: string,
+    icon: bool,
+    row: int,
+    // Left edge and width, in half-key units.
+    x: int,
+    width: int,
+    focused: bool,
+}
+
+export component KeyboardPopup inherits Rectangle {
+    in property <string> title;
+    in property <string> text;
+    in property <[KeyCapData]> keys;
+    // One design unit (the UI is designed at 1080 lines and scaled).
+    in property <length> u: 1px;
+    callback key-clicked(int);
+
+    property <length> unit: 52 * root.u;
+    property <length> key-h: 70 * root.u;
+    property <length> row-gap: 12 * root.u;
+    property <length> board-w: 22 * root.unit;
+    property <length> panel-h: 680 * root.u;
+
+    // Dims the page and keeps its rows from taking hover and clicks.
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #0d111799;
+
+        TouchArea {
+            width: 100%;
+            height: 100%;
+        }
+    }
+
+    panel := Rectangle {
+        y: root.height - root.panel-h;
+        width: root.width;
+        height: root.panel-h;
+        background: #161b22;
+        border-radius: 28 * root.u;
+
+        Text {
+            text: root.title;
+            x: (parent.width - self.width) / 2;
+            y: 28 * root.u;
+            color: white;
+            font-size: 40 * root.u;
+            font-weight: 600;
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: 96 * root.u;
+            width: 1000 * root.u;
+            height: 72 * root.u;
+            border-radius: 18 * root.u;
+            background: #ffffff1a;
+            border-color: #ffffff59;
+            border-width: 2 * root.u;
+
+            Text {
+                text: root.text;
+                x: 28 * root.u;
+                y: (parent.height - self.height) / 2;
+                color: white;
+                font-size: 34 * root.u;
+            }
+        }
+
+        for key[i] in root.keys: Rectangle {
+            x: (parent.width - root.board-w) / 2 + key.x * root.unit + 4 * root.u;
+            y: 196 * root.u + key.row * (root.key-h + root.row-gap);
+            width: key.width * root.unit - 8 * root.u;
+            height: root.key-h;
+            border-radius: 16 * root.u;
+            background: key.focused ? #ffffff2e : #ffffff14;
+            border-color: #ffffffe6;
+            border-width: key.focused ? 4 * root.u : 0;
+            drop-shadow-color: #ffffff40;
+            drop-shadow-blur: key.focused ? 28 * root.u : 0;
+            animate background, drop-shadow-blur { duration: 120ms; }
+
+            Text {
+                text: key.label;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                color: white;
+                font-family: key.icon ? "Material Icons" : "Inter";
+                font-size: (key.icon ? 36 : 30) * root.u;
+            }
+
+            TouchArea {
+                width: parent.width;
+                height: parent.height;
+                clicked => {
+                    root.key-clicked(i);
+                }
+            }
+        }
+    }
+}

@@ -49,12 +49,47 @@ The gear tile at the end of the row opens Settings (Up/Down, OK, Back; Home retu
   - Add device scans while it's open. Pick a speaker, controller or keyboard in pairing mode.
   - Speakers and controllers pair without a code. Keyboards show a code to type.
   - Nearby devices may include neighbours' gadgets; speakers, controllers, keyboards and mice are listed first.
+- **Wi-Fi:** for when the box is somewhere without Ethernet, such as a hotel. It needs the one-time switch to iwd below; until then the row says "Not available".
+  - The page scans while it's open. The network the box is on comes first, with a check mark, then the rest by signal. A lock marks networks that need a password, and "Saved" marks networks it has joined before.
+  - Pick a new network to join it. Open networks connect right away. For a password, a keyboard pops up:
+    - **Controller or remote:** arrows move, A/OK presses the key, B/Back closes. X deletes, and Start connects.
+    - **Keyboard:** just type. Enter connects, Backspace deletes, Escape closes. You can mix both.
+    - Show/Hide reveals what you typed. If the password is wrong, the keyboard comes back with it.
+  - Pick the current or a saved network for **Disconnect** or **Connect**, and **Forget**.
+  - The box remembers networks it has joined and rejoins them by itself. With Ethernet plugged in, Ethernet stays the main connection.
+  - **Not supported:** hotel sign-in pages (the box has no browser: it connects, but nothing loads until you sign in), hidden networks, and enterprise networks (username and password). Hotel Wi-Fi may also stop AirPlay from finding the box.
 
 Needs `bluez` and `libspa-0.2-bluetooth` (installed). Bluetooth logs go to `sudo journalctl -b -t mushtv-launcher`.
 
 **Wi-Fi and Bluetooth share one chip** (Realtek RTL8821CE). On 2.4 GHz Wi-Fi, Bluetooth audio can stutter while the network is busy (YouTube, Moonlight). Use 5 GHz Wi-Fi or Ethernet if that happens.
 
 `launcher/launcher.toml` in the repo is the source of truth. If the installed copy was edited by hand, deploy shows the diff and keeps a `.bak` before replacing it.
+
+### Switching to iwd (once)
+
+Wi-Fi in Settings uses [iwd](https://iwd.wiki.kernel.org/). Before, the box's Wi-Fi was set up by hand in `/etc/network/interfaces`, with wpa_supplicant. The switch moves only the joining of networks to iwd. ifupdown and dhcpcd still give `wlp2s0` its address, with metric 600, so Ethernet stays first. Ethernet, Docker and Tailscale aren't touched.
+
+1. Deploy first (`sudo ./deploy.sh`). It installs the iwd settings: `/etc/iwd/main.conf`, the D-Bus policy that lets the TV use iwd, and a mask that keeps the name `wlp2s0`.
+2. With Ethernet plugged in and nothing streaming, see what the switch would do, then do it:
+   ```bash
+   sudo bash deploy/wifi-switch-to-iwd.sh --dry-run
+   sudo bash deploy/wifi-switch-to-iwd.sh
+   ```
+   It refuses to run without Ethernet. It keeps a copy of `/etc/network/interfaces` as `interfaces.bak-<date>` and moves the home network's password to `/var/lib/iwd/` (root-only). Then it comments out `wlp2s0`'s `wpa-*` lines and starts iwd. Keep the TV out of Settings while it runs.
+   - **If `wpa-psk` is a 64-digit key** rather than the password, the script stops. iwd can use a key only with WPA2-only routers. If yours is, add `--hex-ok`. Otherwise put the real password in `wpa-psk` first. Or switch with `--hex-ok` and then join home Wi-Fi again from Settings.
+3. Check: `iwctl station wlp2s0 show` says connected, `ip route` still has Ethernet's default route first, and after a reboot the interface is still `wlp2s0`.
+
+**To undo:**
+```bash
+sudo systemctl mask --now iwd    # stop iwd; masked, so the TV's Settings can't start it again
+sudo ifdown wlp2s0
+sudo cp -p /etc/network/interfaces.bak-<date> /etc/network/interfaces
+sudo systemctl enable --now wpa_supplicant
+sudo ifup wlp2s0
+```
+To go back to iwd later: `sudo systemctl unmask iwd`, then run the switch again.
+
+Logs: `sudo journalctl -u iwd` and the launcher's (`wifi:` lines). A Disconnect from Settings keeps iwd from rejoining any network until you Connect again; that's iwd's own behaviour.
 
 ## Mirroring
 
@@ -117,7 +152,14 @@ scripts/devtools.sh                        # once: fetch grim/wtype/wlr-randr lo
 scripts/headless.sh launcher/launcher.toml /tmp/shots my-scenario.sh [3840x2160]
 ```
 
-`headless.sh` runs the launcher inside a cage with no display and sources your scenario script. The script can use `shot <name>`, `key <keysym>` and `pause <seconds>`.
+`headless.sh` runs the launcher inside a cage with no display and sources your scenario script. The script can use `shot <name>`, `key <keysym>`, `type_text <text>` and `pause <seconds>`.
+
+With `MUSHTV_DEMO=1`, Settings shows canned Bluetooth, audio and Wi-Fi data and never touches BlueZ, PipeWire or iwd. Use it for screenshots, so they can't disturb the TV's controller or network:
+```bash
+MUSHTV_DEMO=1 scripts/headless.sh launcher/launcher.toml /tmp/shots launcher/tests/screens/wifi.sh
+scripts/test-wifi-switch.sh                # the switch script's parsing, on fixtures
+scripts/test-deploy.sh                     # deploy.sh into a temporary folder
+```
 
 ## Checklist for the real TV
 
@@ -145,6 +187,10 @@ These can't be tested without the TV connected:
 - [ ] Steam tile: switching GPUs ends the session on the other one, and Steam starts (with the same login) within a minute.
 - [ ] Steam tile: Home (and F12) returns to the tiles; opening the tile again resumes the same game.
 - [ ] Steam tile: Power → Exit Steam returns the TV to the tiles.
+- [ ] Wi-Fi switch: after `deploy/wifi-switch-to-iwd.sh`, Settings → Wi-Fi lists networks, home Wi-Fi is connected, and Ethernet keeps the default route.
+- [ ] Wi-Fi: join a phone hotspot with only a controller, then again (Forget first) with only a keyboard.
+- [ ] Wi-Fi: a wrong password brings the keyboard back with the text kept, and a toast.
+- [ ] Wi-Fi: after a reboot, `wlp2s0` keeps its name and rejoins home Wi-Fi by itself.
 
 ## Roadmap
 

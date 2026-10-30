@@ -1,0 +1,4 @@
+iface wlp2s0 inet dhcp
+    wpa-ssid Home
+    wpa-psk secret123
+    wpa-scan-ssid 1

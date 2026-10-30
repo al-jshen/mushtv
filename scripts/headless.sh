@@ -6,6 +6,7 @@
 # The scenario is sourced inside cage, after the launcher has started, with:
 #   shot <name>      screenshot to <outdir>/<name>.png
 #   key <keysym>...  press and release keys via a virtual keyboard (e.g. Right, Return)
+#   type_text <text> type text via the virtual keyboard
 #   pause <seconds>  sleep
 #   $LAUNCHER_PID    pid of the launcher
 # Needs scripts/devtools.sh to have been run once.
@@ -29,6 +30,7 @@ set -u
 export PATH="$tools:\$PATH"
 shot() { grim "$outdir/\$1.png"; }
 key() { for k in "\$@"; do wtype -k "\$k"; sleep 0.3; done; }
+type_text() { wtype "\$1"; sleep 0.3; }
 pause() { sleep "\$1"; }
 wlr-randr --output HEADLESS-1 --custom-mode "$mode" >/dev/null 2>&1 || echo "headless: could not set mode $mode" >&2
 # Headless cage has no keyboard. Keep a virtual one alive for the whole run,

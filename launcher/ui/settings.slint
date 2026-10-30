@@ -4,6 +4,8 @@ export struct SettingsRow {
     label: string,
     detail: string,
     checked: bool,
+    // Wi-Fi networks that need a password get a lock after their name.
+    locked: bool,
 }
 
 // One settings page: a title, an optional status line, and a centered
@@ -84,12 +86,22 @@ export component SettingsPage inherits Rectangle {
                     font-size: 44 * root.u;
                 }
 
-                Text {
+                label := Text {
                     text: row.label;
                     x: 104 * root.u;
                     y: (parent.height - self.height) / 2;
                     color: white;
                     font-size: 32 * root.u;
+                }
+
+                if row.locked: Text {
+                    // "lock"
+                    text: "\u{e897}";
+                    x: label.x + label.preferred-width + 16 * root.u;
+                    y: (parent.height - self.height) / 2;
+                    color: #ffffffa6;
+                    font-family: "Material Icons";
+                    font-size: 30 * root.u;
                 }
 
                 Text {

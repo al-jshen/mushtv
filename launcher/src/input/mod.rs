@@ -259,6 +259,12 @@ fn read_device(
                         KeyCode::BTN_MODE => send(RawEvent::GuideUp(id)),
                         KeyCode::BTN_SOUTH if down => send(RawEvent::South(id)),
                         KeyCode::BTN_EAST if down => send(RawEvent::Back),
+                        // Xbox X is BTN_X (= BTN_NORTH) under xpad, while
+                        // PlayStation Square is BTN_WEST: both delete.
+                        KeyCode::BTN_NORTH | KeyCode::BTN_WEST if down => {
+                            send(RawEvent::DeleteButton(id))
+                        }
+                        KeyCode::BTN_START if down => send(RawEvent::StartButton(id)),
                         KeyCode::BTN_DPAD_LEFT => send(dir(Axis::X, -1)),
                         KeyCode::BTN_DPAD_RIGHT => send(dir(Axis::X, 1)),
                         KeyCode::BTN_DPAD_UP => send(dir(Axis::Y, -1)),

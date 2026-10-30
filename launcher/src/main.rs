@@ -3,13 +3,16 @@ mod bluetooth;
 mod choice;
 mod choice_ui;
 mod config;
+mod demo;
 mod input;
 mod mirroring;
 mod mirroring_ui;
+mod osk;
 mod prefs;
 mod runner;
 mod settings;
 mod settings_ui;
+mod wifi;
 
 slint::include_modules!();
 
@@ -453,7 +456,7 @@ fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
             Action::Down => choice_ui::ChoiceNav::Down,
             Action::Activate => choice_ui::ChoiceNav::Select,
             Action::Back | Action::Home => choice_ui::ChoiceNav::Back,
-            Action::Left | Action::Right => return,
+            Action::Left | Action::Right | Action::Delete | Action::Submit => return,
         };
         choice_ui::nav(nav);
         return;
@@ -465,7 +468,10 @@ fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
             Action::Activate => settings::Nav::Select,
             Action::Back => settings::Nav::Back,
             Action::Home => settings::Nav::Home,
-            Action::Left | Action::Right => return,
+            Action::Left => settings::Nav::Left,
+            Action::Right => settings::Nav::Right,
+            Action::Delete => settings::Nav::Delete,
+            Action::Submit => settings::Nav::Submit,
         };
         settings_ui::nav_to(nav);
         return;
@@ -475,7 +481,7 @@ fn on_action(ui: &MainWindow, runner: &Runner, action: Action) {
         Action::Right => ui.invoke_move_focus(1),
         Action::Up => ui.invoke_move_row(-1),
         Action::Down => ui.invoke_move_row(1),
-        Action::Back => {}
+        Action::Back | Action::Delete | Action::Submit => {}
         Action::Activate => ui.invoke_activate_focused(),
         Action::Home => {
             if runner.is_active() {

@@ -169,6 +169,7 @@ impl Ctl {
                 label: c.name.as_str().into(),
                 detail: "".into(),
                 checked: false,
+                locked: false,
             })
             .collect();
         ui.set_choice_title(t.name.as_str().into());

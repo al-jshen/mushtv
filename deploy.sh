@@ -94,6 +94,18 @@ if [ -d "$repo/launcher/assets/share" ]; then
 fi
 install_file 644 "$config" "$dest/etc/mushtv/launcher.toml"
 install_file 644 "$repo/deploy/autologin.conf" "$dest/etc/systemd/system/getty@tty1.service.d/autologin.conf"
+# Wi-Fi through iwd (Settings → Wi-Fi). These do nothing until iwd is
+# installed by deploy/wifi-switch-to-iwd.sh, which you run once yourself.
+install_file 644 "$repo/deploy/dbus-mushtv-iwd.conf" "$dest/etc/dbus-1/system.d/mushtv-iwd.conf"
+install_file 644 "$repo/deploy/iwd-main.conf" "$dest/etc/iwd/main.conf"
+# Keep the name wlp2s0: iwd's package renames Wi-Fi interfaces otherwise.
+iwd_link="$dest/etc/systemd/network/80-iwd.link"
+ensure_dir "$(dirname "$iwd_link")"
+if [ -L "$iwd_link" ] || [ ! -e "$iwd_link" ]; then
+  ln -sfn /dev/null "$iwd_link"
+else
+  echo "deploy.sh: $iwd_link is a regular file, left alone (it should mask iwd's renaming)" >&2
+fi
 if [ -n "$dest" ]; then
   ensure_dir "$dest$tv_home"
 fi

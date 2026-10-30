@@ -34,6 +34,10 @@ pub enum RawEvent {
     SelectKey,
     /// Back: the gamepad's right face button (B), or a remote's Back/Exit key.
     Back,
+    /// The gamepad's left or top face button: deletes in the on-screen keyboard.
+    DeleteButton(DevId),
+    /// The gamepad's Start button: presses Connect in the on-screen keyboard.
+    StartButton(DevId),
     DeviceGone(DevId),
 }
 
@@ -46,6 +50,10 @@ pub enum Action {
     Activate,
     Back,
     Home,
+    /// Delete a character in the on-screen keyboard.
+    Delete,
+    /// Press Connect in the on-screen keyboard.
+    Submit,
 }
 
 pub const HOME_DEBOUNCE: Duration = Duration::from_millis(1000);
@@ -124,6 +132,15 @@ impl Logic {
                     vec![Action::Back]
                 } else {
                     vec![]
+                }
+            }
+            RawEvent::DeleteButton(_) | RawEvent::StartButton(_) => {
+                if !self.navigation_allowed(now) {
+                    vec![]
+                } else if matches!(ev, RawEvent::DeleteButton(_)) {
+                    vec![Action::Delete]
+                } else {
+                    vec![Action::Submit]
                 }
             }
             RawEvent::DeviceGone(dev) => {
@@ -404,5 +421,27 @@ mod tests {
         l.on_event(RawEvent::GuideDown(2), t + ms(500));
         l.on_event(RawEvent::GuideUp(1), t + ms(600));
         assert_eq!(l.on_tick(t + ms(1500)), vec![Home]);
+    }
+
+    #[test]
+    fn delete_and_start_buttons_act_when_navigation_allowed() {
+        let (mut l, t) = setup();
+        assert_eq!(l.on_event(RawEvent::DeleteButton(1), t), vec![Delete]);
+        assert_eq!(l.on_event(RawEvent::StartButton(1), t), vec![Submit]);
+    }
+
+    #[test]
+    fn delete_and_start_ignored_while_app_runs_or_cooling_down() {
+        let (mut l, t) = setup();
+        l.set_app_active(true, t);
+        assert_eq!(l.on_event(RawEvent::DeleteButton(1), t), vec![]);
+        assert_eq!(l.on_event(RawEvent::StartButton(1), t), vec![]);
+        l.set_app_active(false, t + ms(1000));
+        assert_eq!(l.on_event(RawEvent::DeleteButton(1), t + ms(1300)), vec![]);
+        assert_eq!(l.on_event(RawEvent::StartButton(1), t + ms(1300)), vec![]);
+        assert_eq!(
+            l.on_event(RawEvent::StartButton(1), t + ms(1600)),
+            vec![Submit]
+        );
     }
 }

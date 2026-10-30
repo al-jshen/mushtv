@@ -1,0 +1,3 @@
+iface wlp2s0 inet dhcp
+    wpa-ssid Home
+    wpa-psk back\slash12

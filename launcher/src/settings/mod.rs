@@ -8,6 +8,10 @@ use crate::audio::{AudioState, OutputKind, bt_address_from_node_name};
 pub use crate::bluetooth::model::BtOp;
 use crate::bluetooth::model::{BtDevice, DeviceKind};
 use crate::mirroring::MirrorMode;
+use crate::osk::PlacedKey;
+use crate::wifi::model::{Passphrase, WifiState};
+
+mod wifi;
 
 /// How long to wait for a speaker's audio output after asking to connect it.
 pub const CONNECT_SWITCH_TIMEOUT: Duration = Duration::from_secs(15);
@@ -16,7 +20,11 @@ pub const CONNECT_SWITCH_TIMEOUT: Duration = Duration::from_secs(15);
 /// after this long (BlueZ's own pairing timeout is shorter).
 pub const BUSY_TIMEOUT: Duration = Duration::from_secs(90);
 
-/// Everything the screens show, refreshed by the Bluetooth and audio workers.
+/// The same for a Wi-Fi operation.
+pub const WIFI_BUSY_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Everything the screens show, refreshed by the Bluetooth, Wi-Fi and audio
+/// workers.
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
     pub bt_available: bool,
@@ -27,6 +35,7 @@ pub struct Snapshot {
     /// A passkey to show while pairing (keyboards).
     pub passkey: Option<String>,
     pub mirroring_mode: MirrorMode,
+    pub wifi: WifiState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +45,13 @@ pub enum Nav {
     Select,
     Back,
     Home,
+    /// Left, Right, Delete, Submit and typed characters only act in the
+    /// password keyboard.
+    Left,
+    Right,
+    Delete,
+    Submit,
+    Char(char),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +77,18 @@ pub enum Effect {
     Toast(String),
     /// Save and use this mirroring mode.
     SetMirroringMode(MirrorMode),
+    /// Start/stop the Wi-Fi worker's polling.
+    SetWifiActive(bool),
+    WifiPowerOn,
+    /// Scan now and every few seconds (true) or stop asking (false).
+    WifiScanning(bool),
+    WifiConnect {
+        path: String,
+        passphrase: Option<Passphrase>,
+    },
+    /// The network's path, for the result.
+    WifiDisconnect(String),
+    WifiForget(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +108,9 @@ pub enum Icon {
     Mirroring,
     LowLag,
     Smooth,
+    Wifi,
+    /// Signal strength, 1–4 bars.
+    WifiSignal(u8),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +122,8 @@ pub struct RowView {
     pub label: String,
     pub detail: String,
     pub checked: bool,
+    /// Drawn with a lock (Wi-Fi networks that need a password).
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +132,16 @@ pub struct View {
     pub status: String,
     pub rows: Vec<RowView>,
     pub focused: usize,
+    /// The password keyboard, over the page.
+    pub keyboard: Option<KeyboardView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyboardView {
+    pub title: String,
+    /// What the field shows: dots, or the text when shown.
+    pub text: String,
+    pub keys: Vec<PlacedKey>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,6 +155,10 @@ enum Page {
     },
     Add,
     Mirroring,
+    Wifi,
+    WifiNetwork {
+        path: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,6 +200,9 @@ pub struct Settings {
     stack: Vec<Frame>,
     busy: Option<Busy>,
     pending: Option<Pending>,
+    wifi_busy: Option<wifi::WifiBusy>,
+    /// The password keyboard, open over the Wi-Fi page.
+    popup: Option<wifi::Popup>,
 }
 
 impl Settings {
@@ -174,12 +224,15 @@ impl Settings {
             return vec![];
         }
         self.stack = vec![Frame::new(Page::Menu)];
-        vec![Effect::SetBtActive(true)]
+        vec![Effect::SetBtActive(true), Effect::SetWifiActive(true)]
     }
 
     pub fn nav(&mut self, nav: Nav, snap: &Snapshot, now: Instant) -> Vec<Effect> {
         if !self.is_open() {
             return vec![];
+        }
+        if self.popup.is_some() {
+            return self.keyboard_nav(nav, now);
         }
         match nav {
             Nav::Home => self.close(),
@@ -196,6 +249,7 @@ impl Settings {
                 vec![]
             }
             Nav::Select => self.select(snap, now),
+            Nav::Left | Nav::Right | Nav::Delete | Nav::Submit | Nav::Char(_) => vec![],
         }
     }
 
@@ -241,6 +295,7 @@ impl Settings {
         {
             self.stack.pop();
         }
+        self.wifi_on_data(snap, now);
         self.refocus(snap);
         effects
     }
@@ -303,6 +358,8 @@ impl Settings {
                 },
             ),
             Some(Page::Device { path }) => (device_name_by_path(snap, path), String::new()),
+            Some(Page::Wifi) => ("Wi-Fi".to_string(), self.wifi_status(snap)),
+            Some(Page::WifiNetwork { path }) => (wifi::network_title(snap, path), String::new()),
             Some(Page::Add) => {
                 let status = match (&snap.passkey, &self.busy) {
                     (Some(code), Some(b)) => {
@@ -323,6 +380,7 @@ impl Settings {
             status,
             rows,
             focused,
+            keyboard: self.keyboard_view(),
         }
     }
 
@@ -339,8 +397,16 @@ impl Settings {
         if self.top() == Some(&Page::Add) {
             effects.push(Effect::StopScan);
         }
+        if self.stack.iter().any(|f| f.page == Page::Wifi) {
+            effects.push(Effect::WifiScanning(false));
+        }
         self.stack.clear();
-        effects.extend([Effect::SetBtActive(false), Effect::Close]);
+        self.popup = None;
+        effects.extend([
+            Effect::SetBtActive(false),
+            Effect::SetWifiActive(false),
+            Effect::Close,
+        ]);
         effects
     }
 
@@ -349,10 +415,10 @@ impl Settings {
             return self.close();
         }
         let left = self.stack.pop().map(|f| f.page);
-        if left == Some(Page::Add) {
-            vec![Effect::StopScan]
-        } else {
-            vec![]
+        match left {
+            Some(Page::Add) => vec![Effect::StopScan],
+            Some(Page::Wifi) => vec![Effect::WifiScanning(false)],
+            _ => vec![],
         }
     }
 
@@ -371,7 +437,8 @@ impl Settings {
                 .as_ref()
                 .and_then(|key| rows.iter().position(|r| &r.key == key));
             frame.focus = found.unwrap_or(frame.focus.min(rows.len().saturating_sub(1)));
-            if frame.key.is_some() {
+            // An empty list (a blip) keeps the key, to find the row again.
+            if frame.key.is_some() && !rows.is_empty() {
                 frame.key = rows.get(frame.focus).map(|r| r.key.clone());
             }
         }
@@ -383,24 +450,33 @@ impl Settings {
         let focus = self.focus();
         match self.top().cloned() {
             None => vec![],
-            Some(Page::Menu) => match focus {
-                0 => {
-                    self.push(Page::Audio);
-                    vec![]
-                }
-                2 => {
-                    self.push(Page::Mirroring);
-                    vec![]
-                }
-                _ => {
-                    self.push(Page::Bluetooth);
-                    if snap.bt_available {
-                        vec![Effect::PowerOn]
-                    } else {
+            Some(Page::Menu) => {
+                let key = self.rows(snap).get(focus).map(|r| r.key.clone());
+                match key.as_deref() {
+                    Some("audio") => {
+                        self.push(Page::Audio);
                         vec![]
                     }
+                    Some("bluetooth") => {
+                        self.push(Page::Bluetooth);
+                        if snap.bt_available {
+                            vec![Effect::PowerOn]
+                        } else {
+                            vec![]
+                        }
+                    }
+                    Some("wifi") => {
+                        self.push(Page::Wifi);
+                        self.pin_wifi_focus(snap);
+                        wifi::enter_effects(snap)
+                    }
+                    Some("mirroring") => {
+                        self.push(Page::Mirroring);
+                        vec![]
+                    }
+                    _ => vec![],
                 }
-            },
+            }
             Some(Page::Audio) => {
                 if focus == 0 {
                     return match tv_output_id(snap) {
@@ -490,6 +566,8 @@ impl Settings {
                 };
                 vec![Effect::SetMirroringMode(mode)]
             }
+            Some(Page::Wifi) => self.wifi_select(snap, now),
+            Some(Page::WifiNetwork { path }) => self.network_select(&path, snap, now),
             Some(Page::Add) => {
                 let Some(device) = new_devices(snap).get(focus).cloned() else {
                     return vec![];
@@ -514,6 +592,7 @@ impl Settings {
             label: label.to_string(),
             detail,
             checked,
+            locked: false,
         };
         match self.top() {
             None => vec![],
@@ -538,6 +617,7 @@ impl Settings {
                         false,
                     ),
                     row("bluetooth", Icon::Bluetooth, "Bluetooth", bt_detail, false),
+                    row("wifi", Icon::Wifi, "Wi-Fi", wifi::menu_detail(snap), false),
                     row(
                         "mirroring",
                         Icon::Mirroring,
@@ -610,6 +690,8 @@ impl Settings {
                     row("forget", Icon::Forget, "Forget", String::new(), false),
                 ]
             }
+            Some(Page::Wifi) => self.wifi_rows(snap),
+            Some(Page::WifiNetwork { path }) => wifi::network_rows(snap, path),
             Some(Page::Add) => new_devices(snap)
                 .into_iter()
                 .map(|d| {
@@ -792,6 +874,7 @@ mod tests {
             }),
             passkey: None,
             mirroring_mode: MirrorMode::LowLag,
+            wifi: WifiState::default(),
         }
     }
 
@@ -814,11 +897,17 @@ mod tests {
     fn opening_activates_bluetooth_polling() {
         let mut st = Settings::new();
         assert!(!st.is_open());
-        assert_eq!(st.open(), vec![Effect::SetBtActive(true)]);
+        assert_eq!(
+            st.open(),
+            vec![Effect::SetBtActive(true), Effect::SetWifiActive(true)]
+        );
         assert!(st.is_open());
         let v = st.view(&snap());
         assert_eq!(v.title, "Settings");
-        assert_eq!(labels(&v), ["Audio output", "Bluetooth", "Mirroring"]);
+        assert_eq!(
+            labels(&v),
+            ["Audio output", "Bluetooth", "Wi-Fi", "Mirroring"]
+        );
     }
 
     #[test]
@@ -868,7 +957,11 @@ mod tests {
         assert_eq!(st.view(&s).title, "Settings");
         assert_eq!(
             st.nav(Nav::Back, &s, now()),
-            vec![Effect::SetBtActive(false), Effect::Close]
+            vec![
+                Effect::SetBtActive(false),
+                Effect::SetWifiActive(false),
+                Effect::Close
+            ]
         );
         assert!(!st.is_open());
     }
@@ -879,10 +972,10 @@ mod tests {
         let mut st = open(&s);
         st.nav(Nav::Up, &s, now());
         assert_eq!(st.view(&s).focused, 0);
-        st.nav(Nav::Down, &s, now());
-        st.nav(Nav::Down, &s, now());
-        st.nav(Nav::Down, &s, now());
-        assert_eq!(st.view(&s).focused, 2, "clamped to the last menu row");
+        for _ in 0..4 {
+            st.nav(Nav::Down, &s, now());
+        }
+        assert_eq!(st.view(&s).focused, 3, "clamped to the last menu row");
     }
 
     #[test]
@@ -1211,7 +1304,12 @@ mod tests {
         to_add_page(&mut st, &s);
         assert_eq!(
             st.nav(Nav::Home, &s, now()),
-            vec![Effect::StopScan, Effect::SetBtActive(false), Effect::Close]
+            vec![
+                Effect::StopScan,
+                Effect::SetBtActive(false),
+                Effect::SetWifiActive(false),
+                Effect::Close
+            ]
         );
     }
 
@@ -1309,7 +1407,7 @@ mod tests {
         st.set_focus(1, &s);
         assert_eq!(st.view(&s).focused, 1);
         st.set_focus(9, &s);
-        assert_eq!(st.view(&s).focused, 2);
+        assert_eq!(st.view(&s).focused, 3);
     }
 
     #[test]
@@ -1471,13 +1569,14 @@ mod tests {
     fn menu_shows_the_mirroring_mode() {
         let mut s = snap();
         let st = open(&s);
-        assert_eq!(st.view(&s).rows[2].detail, "Low lag");
-        assert_eq!(st.view(&s).rows[2].icon, Icon::Mirroring);
+        assert_eq!(st.view(&s).rows[3].detail, "Low lag");
+        assert_eq!(st.view(&s).rows[3].icon, Icon::Mirroring);
         s.mirroring_mode = MirrorMode::Smooth;
-        assert_eq!(st.view(&s).rows[2].detail, "Smooth playback");
+        assert_eq!(st.view(&s).rows[3].detail, "Smooth playback");
     }
 
     fn to_mirroring_page(st: &mut Settings, s: &Snapshot) {
+        st.nav(Nav::Down, s, now());
         st.nav(Nav::Down, s, now());
         st.nav(Nav::Down, s, now());
         st.nav(Nav::Select, s, now());
@@ -1519,7 +1618,7 @@ mod tests {
         st.nav(Nav::Back, &s, now());
         let v = st.view(&s);
         assert_eq!(v.title, "Settings");
-        assert_eq!(v.focused, 2);
+        assert_eq!(v.focused, 3);
     }
 
     #[test]
@@ -1529,7 +1628,11 @@ mod tests {
         to_device_page(&mut st, &s, 0);
         assert_eq!(
             st.nav(Nav::Home, &s, now()),
-            vec![Effect::SetBtActive(false), Effect::Close]
+            vec![
+                Effect::SetBtActive(false),
+                Effect::SetWifiActive(false),
+                Effect::Close
+            ]
         );
         assert!(!st.is_open());
     }
