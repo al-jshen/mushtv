@@ -100,9 +100,9 @@ class ConfigForTest(unittest.TestCase):
             self.function = re.search(r"^config_for\(\) \{.*?^\}$", f.read(), re.M | re.S).group(0)
         self.cfg = os.path.join(self.tmp.name, "cfg", "config.toml")
 
-    def config_for(self, tz):
+    def config_for(self, tz, name="spc-rtx"):
         subprocess.run(
-            ["bash", "-c", f'set -euo pipefail; tz="{tz}"\n{self.function}\nconfig_for "{os.path.dirname(self.cfg)}" spc'],
+            ["bash", "-c", f'set -euo pipefail; tz="{tz}"\n{self.function}\nconfig_for "{os.path.dirname(self.cfg)}" {name}'],
             cwd=HERE, check=True, capture_output=True, text=True,
         )
         with open(self.cfg) as f:
@@ -134,6 +134,23 @@ id = 'moonlight-profile-id'
         self.assertEqual(env[:2], ["TZ=America/New_York", "RUN_SWAY=true"])
         env = self.steam_env(self.config_for("Europe/Paris"))
         self.assertEqual(env[:2], ["TZ=Europe/Paris", "RUN_SWAY=true"])
+
+    def test_a_kept_config_gets_the_servers_name(self):
+        # Moonlight's command line matches a server by name or by any of its
+        # addresses without the port; "spc" matched both servers, so the
+        # RTX 4060 one is spc-rtx.
+        os.makedirs(os.path.dirname(self.cfg))
+        with open(self.cfg, "w") as f:
+            f.write("hostname = 'spc'\nuuid = 'x'\n# steam-lock\n")
+        text = self.config_for("UTC", "spc-rtx")
+        self.assertEqual(tomllib.loads(text)["hostname"], "spc-rtx")
+        self.assertIn("uuid = 'x'", text)
+
+    def test_setup_names_the_servers_apart(self):
+        with open(os.path.join(HERE, "setup.sh")) as f:
+            setup = f.read()
+        self.assertIn("config_for /etc/wolf/cfg spc-rtx\n", setup)
+        self.assertIn("config_for /etc/wolf-igpu/cfg spc-igpu\n", setup)
 
 
 class SharedHomeTest(unittest.TestCase):

@@ -110,7 +110,7 @@ When the receiver starts, Home Assistant or Music Assistant on this box may brie
 The **Steam** tile streams Steam's TV interface (Big Picture) from the gaming PC, spc, with Moonlight, at 1080p and 60 fps over Tailscale. On spc, [Wolf](server/spc/README.md) gives the TV its own invisible desktop, so someone can keep using spc's own screen at the same time.
 
 - **Opening the tile asks which GPU:**
-  - **Graphics card (RTX 4060)** streams from the server `spc`: full power, but not while someone is playing a game at spc's desk (the card runs out of memory and Moonlight says "No video received from host").
+  - **Graphics card (RTX 4060)** streams from the server `spc-rtx`: full power, but not while someone is playing a game at spc's desk (the card runs out of memory and Moonlight says "No video received from host").
   - **Integrated graphics card** streams from `spc-igpu`: light games (Overcooked 2 and the like) without touching the RTX 4060.
   - Up/Down and OK choose; Back or Home cancels. It starts on the one used last (saved in `~/.local/state/mushtv/settings.toml`, tv's home).
 - **Both share one Steam:** one login, games installed once, and the same saves and game settings, so a game continues on either GPU. Only one runs at a time, so picking one GPU ends a session left open on the other (unsaved progress there is lost).

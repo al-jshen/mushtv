@@ -48,15 +48,19 @@ install -d -m 700 -o "$user" -g "$user" /etc/wolf-steam
 # Each server's config: from the template, with its name, a fresh server ID
 # and spc's time zone (for Steam's clock). A config without the Steam lock
 # predates two servers: keep it as config.toml.bak and replace it (devices
-# then pair again). A config that's kept gets the current time zone; ones
-# from before the time zone have Proton's debug log in its place.
+# then pair again). A config that's kept gets the current time zone (ones
+# from before the time zone have Proton's debug log in its place) and its
+# server's name. The names must not equal an address: Moonlight's command
+# line also matches a server by its address without the port, and both
+# servers are at "spc", so the RTX 4060 one is spc-rtx.
 tz=$(timedatectl show -p Timezone --value)
 config_for() { # <dir> <hostname>
 	local cfg="$1/config.toml"
 	install -d -m 700 "$1"
 	if [ -e "$cfg" ] && grep -q steam-lock "$cfg"; then
 		sed -i -e "s|\([\"']\)PROTON_LOG=1\([\"']\)|\1TZ=$tz\2|" \
-			-e "s|\([\"']\)TZ=[^\"']*\([\"']\)|\1TZ=$tz\2|" "$cfg"
+			-e "s|\([\"']\)TZ=[^\"']*\([\"']\)|\1TZ=$tz\2|" \
+			-e "s|^hostname = .*|hostname = '$2'|" "$cfg"
 		return
 	fi
 	if [ -e "$cfg" ]; then
@@ -67,7 +71,7 @@ config_for() { # <dir> <hostname>
 		config.toml >"$cfg"
 	chmod 600 "$cfg"
 }
-config_for /etc/wolf/cfg spc
+config_for /etc/wolf/cfg spc-rtx
 config_for /etc/wolf-igpu/cfg spc-igpu
 
 systemctl daemon-reload

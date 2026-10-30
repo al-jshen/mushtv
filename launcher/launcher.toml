@@ -37,8 +37,9 @@ stop_command = ["flatpak", "run", "--command=jellyfin-mpv-shim", "com.github.iwa
 color = "#101b2e"
 
 # Streams Steam from the gaming PC over Tailscale, from one of its two Wolf
-# servers (see server/spc/README.md): "spc" renders on the RTX 4060, "spc-igpu"
-# on the integrated graphics, which a game at spc's desk doesn't need. Both
+# servers (see server/spc/README.md): "spc-rtx" renders on the RTX 4060,
+# "spc-igpu" on the integrated graphics, which a game at spc's desk doesn't
+# need. They're named so no name equals an address ("spc"). Both
 # share one Steam. Home disconnects but leaves the game running on spc
 # (--no-quit-after); exiting Steam ends the session and returns here.
 [[tile]]
@@ -49,7 +50,7 @@ color = "#1b2838"
 
 [[tile.choice]]
 name = "Graphics card (RTX 4060)"
-command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc", "Steam",
+command = ["flatpak", "run", "com.moonlight_stream.Moonlight", "stream", "spc-rtx", "Steam",
            "--1080", "--fps", "60", "--display-mode", "fullscreen", "--multi-controller", "--no-quit-after"]
 
 [[tile.choice]]

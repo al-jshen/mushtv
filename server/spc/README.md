@@ -10,7 +10,7 @@ spc is the gaming PC (RTX 4060) that the TV streams games from with Moonlight. S
 
 | Server (Moonlight name) | GPU | Ports (TCP; UDP) | systemd unit, container |
 |---|---|---|---|
-| **spc** | RTX 4060 | 47984, 47989, 48010; 47999, 48100, 48200 | `wolf@nvidia`, `wolf`, state in `/etc/wolf` |
+| **spc-rtx** | RTX 4060 | 47984, 47989, 48010; 47999, 48100, 48200 | `wolf@nvidia`, `wolf`, state in `/etc/wolf` |
 | **spc-igpu** | Ryzen's integrated graphics | 48984, 48989, 49010; 48999, 49100, 49200 | `wolf@amdgpu`, `wolf-igpu`, state in `/etc/wolf-igpu` |
 
 - **Why two:** the RTX 4060 and its 8 GB of video memory are shared with the desk. A game there can take most of it (one took 5.8 GB), and then a stream can't even start: Wolf's encoder fails with `CUDA_ERROR_OUT_OF_MEMORY` (`docker logs wolf`) and Moonlight says "No video received from host". The integrated graphics uses system RAM, so **spc-igpu** never touches the RTX 4060 or a game at the desk; it's weak, though: fine for light games (Overcooked 2 and the like), not modern 3D. Wolf can't mix GPUs in one server, hence two.
@@ -56,6 +56,8 @@ The first start pulls Wolf and builds the driver volume, which takes a few minut
 
 **Upgrading from one server** (`wolf.service`): `setup.sh` removes it and replaces the old config (kept as `config.toml.bak`) so the server gets an ID and the Steam mounts. Devices then pair with both servers again, and Steam asks you to sign in once in the new shared folder (the old per-device copies under `/etc/wolf/*/Steam/.steam` are no longer used and can be deleted).
 
+**Names:** the servers are named `spc-rtx` and `spc-igpu`, and the TV's Steam tile streams from them by name. A name must not equal an address: Moonlight's command line matches a server by its name, or by any of its addresses without the port. Both servers are at `spc`, so with the old name `spc`, the RTX 4060 choice sometimes got the integrated graphics. `setup.sh` sets the names, in existing configs too.
+
 **Pairing** a Moonlight client: pair with `spc` and with `spc:48989` (the second server's port). Each shows a PIN; find the PIN link in that server's log (`docker logs wolf | grep -i pin`, `docker logs wolf-igpu | grep -i pin`) and submit the PIN from spc at `http://localhost:47989/pin/#<secret>` (or `:48989`).
 
 **Pairing the TV** (it has no Moonlight menus): run these on the TV box (substrate) while a watcher on spc approves the PIN, or submit it by hand as above. If Moonlight still remembers an old pairing with a server whose pairings were reset, it keeps using that and never asks for a PIN; clear its saved servers first (only the `[hosts]` section; a `.bak` is kept):
@@ -69,7 +71,7 @@ sudo -u tv env XDG_RUNTIME_DIR=/run/user/1002 DBUS_SESSION_BUS_ADDRESS=unix:path
 
 ## Using it
 
-- **Address:** clients reach both over Tailscale (`spc`, `spc:48989`). Moonlight treats Tailscale addresses as remote and keeps packets small enough for it.
+- **Address:** clients reach both over Tailscale (`spc`, `spc:48989`); Moonlight lists them as `spc-rtx` and `spc-igpu`. Moonlight treats Tailscale addresses as remote and keeps packets small enough for it.
 - **Leaving:** closing Moonlight (or Home on the TV) disconnects but leaves the game running; reconnecting to the same server resumes it, within 30 minutes. To end it, exit Steam (Power → Exit Steam) or quit the app from Moonlight.
 - **Moonlight shows an old "spc" next to the new one** (after upgrading from one server): delete the old entry in Moonlight's menus.
 - **Controllers are presented to games as Xbox controllers.** Steam Input (Steam's remapping, on by default for PlayStation controllers) needs to create virtual devices, which doesn't work in Wolf's containers ([Wolf issue #81](https://github.com/games-on-whales/wolf/issues/81)): Steam's menus see the controller but games don't. Wolf's per-device `controllers_override` avoids it. It's set for the TV on both servers through Wolf's API, so it's stored in each server's config (and lost if that config is replaced):
