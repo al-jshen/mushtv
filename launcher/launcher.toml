@@ -22,10 +22,13 @@ guide_hold_ms = 1000          # hold a gamepad's Guide button this long to retur
 #                 Without it, Flatpak apps use their own icon.
 #   color         optional tile background, "#rrggbb"
 
+# VacuumTube runs on Wayland only if the session says XDG_SESSION_TYPE=wayland.
+# The TV's console login says "tty", so it would try X11, which the sandbox
+# doesn't give it, and quit at once ("YouTube closed unexpectedly").
 [[tile]]
 id = "youtube"
 name = "YouTube"
-command = ["flatpak", "run", "rocks.shy.VacuumTube", "--fullscreen"]
+command = ["flatpak", "run", "--env=XDG_SESSION_TYPE=wayland", "rocks.shy.VacuumTube", "--fullscreen"]
 icon = "youtube.svg"
 color = "#1f1f1f"
 

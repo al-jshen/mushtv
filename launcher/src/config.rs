@@ -612,6 +612,26 @@ mod tests {
         load(&path, &no_icons()).unwrap();
     }
 
+    /// The TV's login is a console one, so the session says
+    /// XDG_SESSION_TYPE=tty. VacuumTube picks Wayland only when it says
+    /// "wayland", and with X11 it quits at once.
+    #[test]
+    fn repo_youtube_tile_runs_on_wayland() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("launcher.toml");
+        let c = load(&path, &no_icons()).unwrap();
+        let yt = c.tiles.iter().find(|t| t.id == "youtube").unwrap();
+        let app = yt
+            .command
+            .iter()
+            .position(|a| a == "rocks.shy.VacuumTube")
+            .unwrap();
+        assert!(
+            yt.command[2..app].contains(&"--env=XDG_SESSION_TYPE=wayland".to_string()),
+            "{:?}",
+            yt.command
+        );
+    }
+
     const CHOICES: &str = r#"
         [[tile]]
         id = "steam"
