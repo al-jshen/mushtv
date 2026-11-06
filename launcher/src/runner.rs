@@ -59,6 +59,7 @@ struct Shared {
     gone: Condvar,
     on_event: Box<dyn Fn(RunEvent) + Send + Sync>,
     journal: bool,
+    before_start: Option<Box<dyn Fn() + Send + Sync>>,
 }
 
 struct Running {
@@ -77,8 +78,18 @@ impl Runner {
                 gone: Condvar::new(),
                 on_event: Box::new(on_event),
                 journal,
+                before_start: None,
             }),
         }
+    }
+
+    /// Runs `hook` just before each app starts (not when a launch is
+    /// refused), on the launching thread.
+    pub fn before_start(mut self, hook: impl Fn() + Send + Sync + 'static) -> Self {
+        Arc::get_mut(&mut self.shared)
+            .expect("before_start is set before the runner is shared")
+            .before_start = Some(Box::new(hook));
+        self
     }
 
     /// Starts the tile's command. Returns false if an app is already active.
@@ -135,6 +146,9 @@ impl Runner {
         let mut current = self.shared.current.lock().unwrap();
         if current.is_some() {
             return false;
+        }
+        if let Some(hook) = &self.shared.before_start {
+            hook();
         }
         let spawned = match find_program(&argv[0]) {
             Some(_) => {
@@ -467,6 +481,39 @@ mod tests {
                 quick: true
             }
         );
+    }
+
+    #[test]
+    fn before_start_runs_once_per_started_app() {
+        let (r, rx) = runner();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let r = r.before_start({
+            let calls = Arc::clone(&calls);
+            move || {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        });
+        let count = || calls.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(r.launch(0, &tile(&["sleep", "30"], None)));
+        assert_eq!(count(), 1);
+        // Refused while an app is active: no call.
+        assert!(!r.launch(1, &tile(&["sh", "-c", "exit 0"], None)));
+        assert_eq!(count(), 1);
+        r.stop_blocking(Duration::from_secs(10));
+        let _ = next(&rx, Duration::from_secs(5));
+        let t = with_choices(&[&["sh", "-c", "exit 0"], &["sh", "-c", "exit 0"]]);
+        assert!(r.launch_choice(0, &t, 1));
+        assert_eq!(count(), 2);
+        let _ = next(&rx, Duration::from_secs(5));
+        let on_line: LineSink = Arc::new(|_| {});
+        assert!(r.launch_capturing(
+            App::Mirroring,
+            "m",
+            &strings(&["sh", "-c", "exit 0"]),
+            on_line
+        ));
+        assert_eq!(count(), 3);
+        let _ = next(&rx, Duration::from_secs(5));
     }
 
     #[test]

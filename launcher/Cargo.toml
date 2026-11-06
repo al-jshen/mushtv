@@ -13,7 +13,7 @@ evdev = "0.13"
 # lookup, so building needs no pkg-config or libfontconfig-dev.
 fontique = { version = "0.11", default-features = false, features = ["system", "fontconfig-dlopen"] }
 inotify = "0.11"
-nix = { version = "0.31", features = ["signal", "process"] }
+nix = { version = "0.31", features = ["signal", "process", "fs"] }
 signal-hook = "0.3"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
@@ -23,6 +23,11 @@ zbus = "5"
 tracing = "0.1"
 tracing-journald = "0.3"
 tracing-subscriber = "0.3"
+# The virtual keyboard in seat_keyboard.rs. wayland-client and xkbcommon-dl
+# (which loads libxkbcommon at run time) are already in the tree via winit.
+wayland-client = "0.31"
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+xkbcommon-dl = "0.4"
 
 [build-dependencies]
 slint-build = "1.18"

@@ -147,11 +147,13 @@ sudo -u tv /usr/local/bin/mushtv-launcher --print-input   # which remotes/gamepa
 
 - **Text console:** press Ctrl+Alt+F2, or SSH in.
 - **Back to a normal login prompt on tty1:** delete the autologin override, then `sudo systemctl daemon-reload && sudo systemctl restart getty@tty1`.
+- **Keyboards that come and go:** an 8BitDo receiver adds a keyboard while its controller is on and removes it when the controller sleeps. That used to leave cage with no keyboard layout to give new apps, and VacuumTube crashed as it started ("YouTube closed unexpectedly"; `sudo journalctl -k | grep segfault` shows `libxkbcommon`). Before each app starts, the launcher now resets cage's keyboard through a virtual keyboard of its own (`launcher/src/seat_keyboard.rs`).
 
 ## Development
 
 ```bash
 cd launcher && cargo test                  # unit tests
+scripts/test-seat-keyboard.sh              # the virtual keyboard (above), in a headless cage
 scripts/devtools.sh                        # once: fetch grim/wtype/wlr-randr locally (no root)
 scripts/headless.sh launcher/launcher.toml /tmp/shots my-scenario.sh [3840x2160]
 ```
@@ -192,6 +194,7 @@ These can't be tested without the TV connected:
 - [ ] Steam tile: Home (and F12) returns to the tiles; opening the tile again resumes the same game.
 - [ ] Steam tile: Power → Exit Steam returns the TV to the tiles.
 - [ ] No pointer on the tiles or over a Steam stream, with the keyboard plugged in and the 8BitDo controller on (after `sudo ./deploy.sh --restart`).
+- [ ] YouTube opens after the 8BitDo Ultimate 2C was turned on and then off again (it disconnects after a while idle), without restarting the TV session.
 - [ ] Wi-Fi switch: after `deploy/wifi-switch-to-iwd.sh`, Settings → Wi-Fi lists networks, home Wi-Fi is connected, and Ethernet keeps the default route.
 - [ ] Wi-Fi: join a phone hotspot with only a controller, then again (Forget first) with only a keyboard.
 - [ ] Wi-Fi: a wrong password brings the keyboard back with the text kept, and a toast.

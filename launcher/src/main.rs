@@ -10,6 +10,7 @@ mod mirroring_ui;
 mod osk;
 mod prefs;
 mod runner;
+mod seat_keyboard;
 mod settings;
 mod settings_ui;
 mod wifi;
@@ -265,7 +266,7 @@ fn run(config_path: &Path) -> Result<()> {
     // with a slot that is filled once both exist.
     let input_slot: Arc<std::sync::OnceLock<InputHandle>> = Arc::default();
 
-    let runner = Arc::new(Runner::new(
+    let mut runner = Runner::new(
         {
             let weak = ui.as_weak();
             let tiles = Arc::clone(&tiles);
@@ -279,7 +280,23 @@ fn run(config_path: &Path) -> Result<()> {
             }
         },
         journal,
-    ));
+    );
+    // Every app starts with a keyboard layout, even after a keyboard (such as
+    // an 8BitDo receiver's) went away; see seat_keyboard.rs.
+    match seat_keyboard::SeatKeyboard::connect() {
+        Ok(keyboard) => {
+            let keyboard = std::sync::Mutex::new(keyboard);
+            runner = runner.before_start(move || {
+                if let Err(e) = keyboard.lock().unwrap().rearm() {
+                    tracing::warn!("{e:#}");
+                }
+            });
+        }
+        Err(e) => tracing::warn!(
+            "no virtual keyboard, so apps may start without a keyboard layout: {e:#}"
+        ),
+    }
+    let runner = Arc::new(runner);
 
     let input = input::spawn(config.home_keys.clone(), config.guide_hold, {
         let weak = ui.as_weak();
