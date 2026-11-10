@@ -120,6 +120,28 @@ install_tv_file "$repo/deploy/wireplumber-hdmi.conf" \
   "$dest$tv_home/.config/wireplumber/wireplumber.conf.d/51-mushtv-hdmi.conf" || audio_rc=$?
 [ "$audio_rc" -eq 0 ] || [ "$audio_rc" -eq 10 ] || die "couldn't install the audio config"
 
+# Jellyfin's own Game Controller setting: off by default, and off, the
+# controller does nothing in Jellyfin. Jellyfin writes its whole settings
+# file back while it runs (on a volume change, when it closes), so it's only
+# changed while Jellyfin is closed. The file appears when Jellyfin first opens.
+jellyfin_conf="$dest$tv_home/.var/app/com.github.iwalton3.jellyfin-mpv-shim/config/jellyfin-mpv-shim/conf.json"
+jellyfin_check=""
+if [ -z "$dest" ]; then tv_uid="$(id -u tv)"; else tv_uid="$(id -u)"; fi
+pgrep -u "$tv_uid" -f jellyfin-mpv-shim >/dev/null && jellyfin_check=--check
+gamepad_rc=0
+as_tv python3 -I - "$jellyfin_conf" $jellyfin_check < "$repo/deploy/jellyfin-gamepad.py" || gamepad_rc=$?
+case "$gamepad_rc" in
+  0) ;;
+  10)
+    if [ -n "$jellyfin_check" ]; then
+      echo "deploy.sh: Jellyfin's Game Controller setting is off, but Jellyfin is open on the TV; close Jellyfin (Home) and deploy again" >&2
+    else
+      echo "Jellyfin: turned on Game Controller (from the next time Jellyfin opens)"
+    fi ;;
+  3) echo "deploy.sh: Jellyfin hasn't been opened yet; open it once, then deploy again to turn on its Game Controller setting" >&2 ;;
+  *) echo "deploy.sh: couldn't turn on Jellyfin's Game Controller setting (it's in Jellyfin's Settings, under Input)" >&2 ;;
+esac
+
 if [ -z "$dest" ]; then
   systemctl daemon-reload
   # New udev rules apply to devices as they connect (the 8BitDo rule: the

@@ -91,6 +91,16 @@ To go back to iwd later: `sudo systemctl unmask iwd`, then run the switch again.
 
 Logs: `sudo journalctl -u iwd` and the launcher's (`wifi:` lines). A Disconnect from Settings keeps iwd from rejoining any network until you Connect again; that's iwd's own behaviour.
 
+## Jellyfin
+
+The **Jellyfin** tile opens jellyfin-mpv-shim's own library browser, connected to the Jellyfin server on this box (`http://localhost:10000`). The first login needs a keyboard.
+
+- **With a controller:** the D-pad or left stick moves, A opens, B goes back, and X plays or pauses. Start opens the menu for the focused item, or the player's menu during a video. The shoulder buttons page through long rows, and the right stick seeks.
+- **Game Controller setting:** the controller works only with Jellyfin's own Game Controller setting turned on, and that setting is off by default. Deploy turns it on (`deploy/jellyfin-gamepad.py`).
+  - **Jellyfin must be closed:** it writes its settings back while it runs (on a volume change, and when it closes), which would undo the change. If Jellyfin is open, deploy changes nothing and says so; press Home and deploy again.
+  - **First open:** Jellyfin creates its settings file the first time it opens, so deploy again after that.
+  - **By hand:** the same switch is in Jellyfin's Settings, under Input. It applies from the next time Jellyfin opens.
+
 ## Mirroring
 
 The **Mirroring** tile turns the TV into an AirPlay screen for a Mac, but only while that screen is open. Nothing on the network can see it otherwise.
@@ -177,6 +187,7 @@ These can't be tested without the TV connected:
 - [ ] If a controller's Guide button shows up as `KEY_HOMEPAGE` in `--print-input`, a short press will go home. Consider removing that key from `home_keys`.
 - [x] Each app: opens full-screen, has audio over HDMI, uses hardware decode (VacuumTube: `--debug-gpu`), and Home closes it within about 3 s.
 - [x] jellyfin-mpv-shim: first login (keyboard needed once), server `http://localhost:10000`.
+- [ ] Jellyfin with a controller (after deploying with Jellyfin closed): the D-pad moves around the library, A plays a video, B goes back.
 - [x] The launcher looks right and animates smoothly at the TV's real resolution (4K?).
 - [x] Crash recovery: `sudo pkill -f mushtv-launcher` brings the launcher back within about 5 s.
 - [x] Docker and SSH stay responsive while the TV is in use.

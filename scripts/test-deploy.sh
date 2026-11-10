@@ -56,6 +56,37 @@ deploy "$s"
 check "profile symlink not written through" test "$(cat "$work/victim2")" = original
 check "profile is now a regular file" test -f "$s/home/tv/.bash_profile" -a ! -L "$s/home/tv/.bash_profile"
 
+# Jellyfin's Game Controller setting is turned on; its other settings stay.
+jf_rel=home/tv/.var/app/com.github.iwalton3.jellyfin-mpv-shim/config/jellyfin-mpv-shim/conf.json
+check "no Jellyfin settings made before Jellyfin made its own" test ! -e "$work/fresh/$jf_rel"
+s="$work/jellyfin"
+jf="$s/$jf_rel"
+mkdir -p "$(dirname "$jf")"
+printf '{\n    "config_version": 6,\n    "input_gamepad": false,\n    "video_volume": 80\n}' > "$jf"
+deploy "$s"
+check "Jellyfin controller turned on, other settings kept" python3 -I -c '
+import json, sys
+c = json.load(open(sys.argv[1]))
+sys.exit(not (c == {"config_version": 6, "input_gamepad": True, "video_volume": 80}))' "$jf"
+check "deploy says it turned it on" grep -q 'turned on Game Controller' "$work/out.log"
+deploy "$s"
+check "already on: nothing said" bash -c "! grep -q 'Game Controller' '$work/out.log'"
+
+# ...but not while Jellyfin is open: it writes its own settings back.
+printf '{"input_gamepad": false}' > "$jf"
+bash -c 'exec -a jellyfin-mpv-shim sleep 30' &
+jf_pid=$!
+until pgrep -u "$(id -u)" -f jellyfin-mpv-shim >/dev/null; do sleep 0.1; done
+deploy "$s"
+kill "$jf_pid"
+check "left alone while Jellyfin is open" test "$(cat "$jf")" = '{"input_gamepad": false}'
+check "says to close Jellyfin first" grep -q 'close Jellyfin' "$work/out.log"
+
+# A settings file that isn't JSON is left alone, and deploy still finishes.
+printf 'not json' > "$jf"
+check "deploy finishes with unreadable Jellyfin settings" deploy "$s"
+check "unreadable Jellyfin settings untouched" test "$(cat "$jf")" = "not json"
+
 if [ "$fails" -ne 0 ]; then
   echo "$fails check(s) failed"
   exit 1
